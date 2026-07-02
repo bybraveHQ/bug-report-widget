@@ -32,6 +32,10 @@ type LiveDraw = RectAnn | ArrowAnn | PencilAnn
 
 const STORAGE_KEY = 'bug-report-widget-pos'
 
+// Keep the success state visible just long enough to register, then get out
+// of the user's way.
+const SENT_LINGER_MS = 800
+
 async function captureViewport(): Promise<string> {
   const { snapdom } = await import('@zumer/snapdom')
   // The output is cropped to the viewport, so subtrees that start below it
@@ -509,7 +513,7 @@ export default function Widget({ config }: { config: ResolvedConfig }) {
         setTimeout(() => {
           setPhase('idle')
           setSent(false)
-        }, 1500)
+        }, SENT_LINGER_MS)
       } catch {
         setError(T.errorSend)
       } finally {

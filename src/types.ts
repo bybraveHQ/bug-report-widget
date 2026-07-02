@@ -56,7 +56,7 @@ export const defaultLabels: Labels = {
   placeholderBug: 'Describe the bug...',
   placeholderImprovement: 'Describe the improvement...',
   send: 'Send',
-  sent: 'Sent!',
+  sent: 'Sent',
   cancel: 'Cancel',
   ok: 'OK',
   errorCapture: 'Screenshot failed',
