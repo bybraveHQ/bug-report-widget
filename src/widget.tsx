@@ -32,6 +32,39 @@ type LiveDraw = RectAnn | ArrowAnn | PencilAnn
 
 const STORAGE_KEY = 'bug-report-widget-pos'
 
+async function captureViewport(): Promise<string> {
+  const { snapdom } = await import('@zumer/snapdom')
+  // The output is cropped to the viewport, so subtrees that start below it
+  // don't need to be cloned at all — on long pages this is the difference
+  // between seconds and sub-second capture. Content above the viewport is
+  // kept: removing it would reflow the clone and break the crop offset.
+  const vh = window.innerHeight
+  const capture = await snapdom(document.documentElement, {
+    embedFonts: true,
+    filter: (el: Element) => el.getBoundingClientRect().top <= vh,
+    filterMode: 'remove',
+  })
+  const full = await capture.toCanvas()
+  // Crop the full-document render to what the user actually sees,
+  // keeping devicePixelRatio scale.
+  const dpr = window.devicePixelRatio || 1
+  const out = document.createElement('canvas')
+  out.width = Math.round(window.innerWidth * dpr)
+  out.height = Math.round(vh * dpr)
+  out.getContext('2d')!.drawImage(
+    full,
+    Math.round(window.scrollX * dpr),
+    Math.round(window.scrollY * dpr),
+    out.width,
+    out.height,
+    0,
+    0,
+    out.width,
+    out.height,
+  )
+  return out.toDataURL('image/jpeg', 0.85)
+}
+
 // Events from shadow DOM are retargeted to the host — get the real element via composedPath
 function isEditableTarget(e: Event): boolean {
   const target = e.composedPath()[0]
@@ -225,13 +258,7 @@ export default function Widget({ config }: { config: ResolvedConfig }) {
     if (buttonRef.current) buttonRef.current.style.visibility = 'hidden'
     await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))
     try {
-      const { toJpeg } = await import('html-to-image')
-      const dataUrl = await toJpeg(document.documentElement, {
-        cacheBust: true,
-        width: window.innerWidth,
-        height: window.innerHeight,
-        quality: 0.85,
-      })
+      const dataUrl = await captureViewport()
       setScreenshotDataUrl(dataUrl)
       setAnnotations([])
       setLiveDraw(null)
@@ -257,6 +284,16 @@ export default function Widget({ config }: { config: ResolvedConfig }) {
   }, [triggerCapture])
 
   useEffect(() => { initInterceptors() }, [])
+
+  // Warm up the capture chunk and font/image caches off the critical click path
+  useEffect(() => {
+    const warmUp = () =>
+      void import('@zumer/snapdom')
+        .then((m) => m.preCache(document.documentElement, { embedFonts: true }))
+        .catch(() => {})
+    if ('requestIdleCallback' in window) requestIdleCallback(warmUp)
+    else setTimeout(warmUp, 2000)
+  }, [])
 
   useEffect(() => {
     if (!descriptionOpen) return

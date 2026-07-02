@@ -31,7 +31,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "html-to-image": "^1.11.13",
+    "@zumer/snapdom": "^2.12.9",
     "lucide-preact": "^0.525.0",
     "preact": "^10.26.9"
   },
