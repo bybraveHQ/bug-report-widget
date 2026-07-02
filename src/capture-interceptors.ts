@@ -36,16 +36,47 @@ const originalConsole = {
 }
 let originalFetchRef: typeof globalThis.fetch | null = null
 
+function stringifyArg(arg: unknown): string {
+  try {
+    return JSON.stringify(arg)
+  } catch {
+    return String(arg)
+  }
+}
+
+const FORMAT_SPECIFIERS = /%[sdifoOc%]/g
+const HAS_FORMAT_SPECIFIER = /%[sdifoOc%]/
+
+// Console format directives (%c, %s, …) are resolved like the browser does:
+// substitutions are applied, %c style arguments are consumed and dropped.
 function serializeArgs(args: unknown[]): string {
-  return args
-    .map((arg) => {
-      try {
-        return JSON.stringify(arg)
-      } catch {
+  const [first, ...rest] = args
+  if (typeof first !== 'string' || !HAS_FORMAT_SPECIFIER.test(first)) {
+    return args.map(stringifyArg).join(' ')
+  }
+
+  let argIndex = 0
+  const message = first.replace(FORMAT_SPECIFIERS, (spec) => {
+    if (spec === '%%') return '%'
+    if (argIndex >= rest.length) return spec
+    const arg = rest[argIndex++]
+    switch (spec) {
+      case '%c':
+        return ''
+      case '%s':
         return String(arg)
-      }
-    })
-    .join(' ')
+      case '%d':
+      case '%i':
+        return String(parseInt(String(arg), 10))
+      case '%f':
+        return String(parseFloat(String(arg)))
+      default:
+        return stringifyArg(arg)
+    }
+  })
+
+  const remaining = rest.slice(argIndex).map(stringifyArg)
+  return [message.trim(), ...remaining].join(' ').trim()
 }
 
 function truncate(text: string): string {
