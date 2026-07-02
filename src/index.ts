@@ -48,16 +48,20 @@ export function destroy(): void {
   mount = null
 }
 
-// Auto-initialization from <script> tag data attributes
-const script = document.currentScript as HTMLScriptElement | null
-const endpoint = script?.dataset.endpoint
-if (endpoint) {
-  const start = () =>
-    init({
-      endpoint,
-      hotkey: script?.dataset.hotkey !== 'false',
-      credentials: script?.dataset.credentials as RequestCredentials | undefined,
-    })
-  if (document.body) start()
-  else document.addEventListener('DOMContentLoaded', start, { once: true })
+// Auto-initialization from <script> tag data attributes.
+// The guard keeps the module importable during SSR (Next.js and friends),
+// where `document` does not exist at module-evaluation time.
+if (typeof document !== 'undefined') {
+  const script = document.currentScript as HTMLScriptElement | null
+  const endpoint = script?.dataset.endpoint
+  if (endpoint) {
+    const start = () =>
+      init({
+        endpoint,
+        hotkey: script?.dataset.hotkey !== 'false',
+        credentials: script?.dataset.credentials as RequestCredentials | undefined,
+      })
+    if (document.body) start()
+    else document.addEventListener('DOMContentLoaded', start, { once: true })
+  }
 }
