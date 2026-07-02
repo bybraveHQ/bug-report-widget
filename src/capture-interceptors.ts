@@ -1,4 +1,4 @@
-/* Этот файл намеренно патчит console-методы и fetch для перехвата логов */
+/* This file intentionally patches console methods and fetch to capture logs */
 
 type ConsoleEntry = {
   level: 'log' | 'warn' | 'error' | 'info'
@@ -127,7 +127,7 @@ export function _resetForTesting(): void {
   consoleLogs.length = 0
   networkRequests.length = 0
   initialized = false
-  // Восстановить оригинальные методы чтобы не накапливать слои обёрток
+  // Restore original methods to avoid stacking wrapper layers
   console.log = originalConsole.log
   console.warn = originalConsole.warn
   console.error = originalConsole.error

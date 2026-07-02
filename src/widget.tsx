@@ -32,7 +32,7 @@ type LiveDraw = RectAnn | ArrowAnn | PencilAnn
 
 const STORAGE_KEY = 'bug-report-widget-pos'
 
-// События из shadow DOM ретаргетятся на хост — настоящий элемент достаём из composedPath
+// Events from shadow DOM are retargeted to the host — get the real element via composedPath
 function isEditableTarget(e: Event): boolean {
   const target = e.composedPath()[0]
   return target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement
@@ -162,7 +162,7 @@ export default function Widget({ config }: { config: ResolvedConfig }) {
     el.style.height = el.scrollHeight + 'px'
   }, [pendingText?.value])
 
-  // Фокус на новый text-инпут (заменяет flushSync + focus из React-версии)
+  // Focus the new text input (replaces flushSync + focus from the React version)
   useEffect(() => {
     if (pendingText) textInputRef.current?.focus()
   }, [pendingText?.canvasPos])
@@ -658,7 +658,7 @@ export default function Widget({ config }: { config: ResolvedConfig }) {
             </div>
           )}
 
-          {/* raw textarea: позиционируется поверх canvas по координатам мыши */}
+          {/* raw textarea: positioned over the canvas at mouse coordinates */}
           {pendingText && (
             <textarea
               ref={textInputRef}

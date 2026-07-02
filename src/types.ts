@@ -23,11 +23,11 @@ export interface Labels {
 }
 
 export interface BugReportConfig {
-  /** URL эндпоинта, принимающего multipart/form-data репорт */
+  /** Endpoint URL accepting the multipart/form-data report */
   endpoint: string
   headers?: Record<string, string>
   credentials?: RequestCredentials
-  /** Горячая клавиша Cmd/Ctrl+B, по умолчанию включена */
+  /** Cmd/Ctrl+B hotkey, enabled by default */
   hotkey?: boolean
   labels?: Partial<Labels>
 }

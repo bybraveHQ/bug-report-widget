@@ -1,6 +1,6 @@
 import { defineConfig, type Plugin } from 'vite'
 
-// Мок-эндпоинт для demo-страницы: принимает репорт и отвечает 201
+// Mock endpoint for the demo page: accepts a report and responds with 201
 function mockReportsEndpoint(): Plugin {
   return {
     name: 'mock-reports-endpoint',

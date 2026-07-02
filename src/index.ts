@@ -48,7 +48,7 @@ export function destroy(): void {
   mount = null
 }
 
-// Автоинициализация из data-атрибутов тега <script>
+// Auto-initialization from <script> tag data attributes
 const script = document.currentScript as HTMLScriptElement | null
 const endpoint = script?.dataset.endpoint
 if (endpoint) {
