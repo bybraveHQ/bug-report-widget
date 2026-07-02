@@ -1,9 +1,16 @@
 {
-  "name": "bug-report-widget",
-  "version": "0.1.0",
+  "name": "@bybrave/bug-report-widget",
+  "version": "0.1.1",
   "description": "Embeddable bug report widget: screenshot, annotations, console/network capture. Framework-agnostic, one script tag.",
   "type": "module",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bybraveHQ/bug-report-widget.git"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "files": [
     "dist"
   ],
@@ -19,6 +26,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build && tsc -p tsconfig.build.json",
+    "prepublishOnly": "npm run build",
     "typecheck": "tsc --noEmit",
     "preview": "vite preview"
   },
