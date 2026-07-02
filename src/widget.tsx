@@ -131,7 +131,7 @@ async function submitReport(
   },
 ): Promise<void> {
   const form = new FormData()
-  form.append('screenshot', data.screenshot, 'screenshot.png')
+  form.append('screenshot', data.screenshot, 'screenshot.jpg')
   form.append('url', window.location.href)
   form.append('page_title', document.title)
   form.append('description', data.description)
@@ -515,7 +515,7 @@ export default function Widget({ config }: { config: ResolvedConfig }) {
       } finally {
         setSubmitting(false)
       }
-    }, 'image/png')
+    }, 'image/jpeg', 0.85)
   }
 
   const toolButtons = [
