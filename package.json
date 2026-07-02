@@ -1,0 +1,36 @@
+{
+  "name": "bug-report-widget",
+  "version": "0.1.0",
+  "description": "Embeddable bug report widget: screenshot, annotations, console/network capture. Framework-agnostic, one script tag.",
+  "type": "module",
+  "license": "MIT",
+  "files": [
+    "dist"
+  ],
+  "main": "./dist/bug-report-widget.js",
+  "module": "./dist/bug-report-widget.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/bug-report-widget.js"
+    }
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build && tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "html-to-image": "^1.11.13",
+    "lucide-preact": "^0.525.0",
+    "preact": "^10.26.9"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.1.11",
+    "tailwindcss": "^4.1.11",
+    "typescript": "^5.8.3",
+    "vite": "^7.0.0"
+  }
+}

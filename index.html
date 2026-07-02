@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Bug Report Widget — demo</title>
+    <style>
+      body { font-family: system-ui, sans-serif; margin: 0; padding: 3rem; background: #f8fafc; color: #0f172a; }
+      main { max-width: 640px; margin: 0 auto; display: grid; gap: 1rem; }
+      button { padding: 0.5rem 1rem; border: 1px solid #cbd5e1; border-radius: 6px; background: white; cursor: pointer; }
+      .card { background: white; border: 1px solid #e2e8f0; border-radius: 10px; padding: 1.5rem; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Demo host page</h1>
+      <div class="card">
+        <p>Это страница-хост. Красная кнопка слева — виджет в Shadow DOM.</p>
+        <p>Клик по кнопке или <kbd>Cmd/Ctrl+B</kbd> — скриншот, аннотации, отправка на мок <code>/api/reports</code>.</p>
+      </div>
+      <div class="card">
+        <p>Кнопки для проверки перехвата логов и сети:</p>
+        <button id="err-btn">console.error</button>
+        <button id="net-btn">fetch 404</button>
+      </div>
+    </main>
+    <script type="module">
+      import { init } from '/src/index.ts'
+      init({ endpoint: '/api/reports' })
+
+      document.getElementById('err-btn').addEventListener('click', () => {
+        console.error('demo error', { code: 42 })
+      })
+      document.getElementById('net-btn').addEventListener('click', () => {
+        fetch('/api/does-not-exist').catch(() => {})
+      })
+    </script>
+  </body>
+</html>
