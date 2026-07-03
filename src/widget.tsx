@@ -38,12 +38,13 @@ interface Point {
   y: number
 }
 
-type PencilAnn = { tool: 'pencil'; points: Point[] }
+type PencilAnn = { tool: 'pencil'; points: Point[]; strokeWidth?: number }
 type LiveDraw = RectAnn | ArrowAnn | PencilAnn
 
 const STORAGE_KEY = 'bug-report-widget-pos'
 const DEST_STORAGE_KEY = 'bug-report-widget-dest'
 const REC_STORAGE_KEY = 'bug-report-widget-rec'
+const STROKE_STORAGE_KEY = 'bug-report-widget-stroke'
 
 // Floating button footprint used to clamp its position to the viewport
 const BUTTON_SIZE_PX = 48
@@ -74,6 +75,20 @@ const TEXT_SIZE_MAX = 72
 const TEXT_SIZE_HOLD_DELAY_MS = 350
 const TEXT_SIZE_HOLD_INTERVAL_MS = 50
 const TEXT_INPUT_PADDING_PX = 8
+const STROKE_WIDTH_DEFAULT = 3
+const STROKE_WIDTH_MIN = 1
+const STROKE_WIDTH_MAX = 10
+
+function loadStrokeWidth(): number {
+  try {
+    const saved = Number(localStorage.getItem(STROKE_STORAGE_KEY))
+    if (Number.isInteger(saved) && saved >= STROKE_WIDTH_MIN && saved <= STROKE_WIDTH_MAX)
+      return saved
+  } catch {
+    /* ignore */
+  }
+  return STROKE_WIDTH_DEFAULT
+}
 
 // `field-sizing: content` is Chromium-only, so the annotation text input is
 // sized manually: width from measuring the text, height from scrollHeight.
@@ -172,7 +187,8 @@ function drawAnnotation(
   const color = selected ? '#3b82f6' : reportType === 'bug' ? '#ef4444' : '#eab308'
   ctx.strokeStyle = color
   ctx.fillStyle = color
-  ctx.lineWidth = selected ? 4 : 3
+  const width = ann.tool !== 'text' ? (ann.strokeWidth ?? STROKE_WIDTH_DEFAULT) : STROKE_WIDTH_DEFAULT
+  ctx.lineWidth = selected ? width + 1 : width
   ctx.setLineDash([])
 
   if (ann.tool === 'rect') {
@@ -185,7 +201,8 @@ function drawAnnotation(
     ctx.lineTo(ann.end.x, ann.end.y)
     ctx.stroke()
     const angle = Math.atan2(ann.end.y - ann.start.y, ann.end.x - ann.start.x)
-    const len = 14
+    // Head length tracks stroke width so thick arrows don't look stubby
+    const len = 8 + width * 2
     ctx.beginPath()
     ctx.moveTo(ann.end.x, ann.end.y)
     ctx.lineTo(
@@ -306,6 +323,7 @@ export default function Widget({ config }: { config: ResolvedConfig }) {
   const [notice, setNotice] = useState<string | null>(null)
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null)
   const [cursorDragging, setCursorDragging] = useState(false)
+  const [strokeWidth, setStrokeWidth] = useState(loadStrokeWidth)
   const [textSize, setTextSize] = useState(TEXT_SIZE_DEFAULT)
   const textSizeRef = useRef(TEXT_SIZE_DEFAULT)
   const textSizeHoldRef = useRef<{
@@ -693,6 +711,13 @@ export default function Widget({ config }: { config: ResolvedConfig }) {
     return Math.round((textSize * canvas.width) / rect.width)
   }
 
+  // Slider value is in on-screen px; annotations live in canvas px
+  const getCanvasStrokeWidth = (): number => {
+    const canvas = canvasRef.current!
+    const rect = canvas.getBoundingClientRect()
+    return Math.max(1, Math.round((strokeWidth * canvas.width) / rect.width))
+  }
+
   const selectDestination = (d: 'endpoint' | 'download') => {
     setDestination(d)
     setDestMenuOpen(false)
@@ -838,9 +863,18 @@ export default function Widget({ config }: { config: ResolvedConfig }) {
     if (!isDrawing.current || !drawStart.current) return
     if (tool === 'pencil') {
       pencilPoints.current.push(getXY(e))
-      setLiveDraw({ tool: 'pencil', points: [...pencilPoints.current] })
+      setLiveDraw({
+        tool: 'pencil',
+        points: [...pencilPoints.current],
+        strokeWidth: getCanvasStrokeWidth(),
+      })
     } else {
-      setLiveDraw({ tool, start: drawStart.current, end: getXY(e) } as RectAnn | ArrowAnn)
+      setLiveDraw({
+        tool,
+        start: drawStart.current,
+        end: getXY(e),
+        strokeWidth: getCanvasStrokeWidth(),
+      } as RectAnn | ArrowAnn)
     }
   }
 
@@ -859,11 +893,18 @@ export default function Widget({ config }: { config: ResolvedConfig }) {
     if (tool === 'pencil') {
       const points = [...pencilPoints.current]
       pencilPoints.current = []
-      if (points.length > 1) setAnnotations((prev) => [...prev, { tool: 'pencil', points }])
+      if (points.length > 1)
+        setAnnotations((prev) => [
+          ...prev,
+          { tool: 'pencil', points, strokeWidth: getCanvasStrokeWidth() },
+        ])
     } else {
       const start = drawStart.current
       const end = getXY(e)
-      setAnnotations((prev) => [...prev, { tool, start, end } as RectAnn | ArrowAnn])
+      setAnnotations((prev) => [
+        ...prev,
+        { tool, start, end, strokeWidth: getCanvasStrokeWidth() } as RectAnn | ArrowAnn,
+      ])
     }
     drawStart.current = null
     setLiveDraw(null)
@@ -998,6 +1039,32 @@ export default function Widget({ config }: { config: ResolvedConfig }) {
                 {icon} {label}
               </button>
             ))}
+            {(tool === 'rect' || tool === 'arrow' || tool === 'pencil') && (
+              <div className="flex items-center gap-1.5 px-2 py-1 rounded border border-gray-600">
+                <input
+                  type="range"
+                  min={STROKE_WIDTH_MIN}
+                  max={STROKE_WIDTH_MAX}
+                  step={1}
+                  value={strokeWidth}
+                  onInput={(e) => {
+                    const value = Number(e.currentTarget.value)
+                    setStrokeWidth(value)
+                    try {
+                      localStorage.setItem(STROKE_STORAGE_KEY, String(value))
+                    } catch {
+                      /* ignore */
+                    }
+                  }}
+                  aria-label={T.strokeWidth}
+                  title={T.strokeWidth}
+                  className={`w-16 cursor-pointer ${reportType === 'bug' ? 'accent-red-500' : 'accent-yellow-500'}`}
+                />
+                <span className="text-xs tabular-nums text-gray-300 select-none min-w-[16px] text-center">
+                  {strokeWidth}
+                </span>
+              </div>
+            )}
             {tool === 'text' && (
               <div className="flex items-center rounded overflow-hidden border border-gray-600">
                 <button

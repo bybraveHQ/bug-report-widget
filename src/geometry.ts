@@ -3,9 +3,9 @@ interface Point {
   y: number
 }
 
-export type RectAnn = { tool: 'rect'; start: Point; end: Point }
-export type ArrowAnn = { tool: 'arrow'; start: Point; end: Point }
-export type PencilAnn = { tool: 'pencil'; points: Point[] }
+export type RectAnn = { tool: 'rect'; start: Point; end: Point; strokeWidth?: number }
+export type ArrowAnn = { tool: 'arrow'; start: Point; end: Point; strokeWidth?: number }
+export type PencilAnn = { tool: 'pencil'; points: Point[]; strokeWidth?: number }
 export type TextAnn = { tool: 'text'; pos: Point; text: string; fontSize: number }
 export type Annotation = RectAnn | ArrowAnn | PencilAnn | TextAnn
 
