@@ -4,6 +4,16 @@ Portable bug report button: page screenshot, annotations (rect / arrow / pencil 
 
 Preact + Tailwind v4 inside, compiled into the bundle.
 
+## Screenshots
+
+The floating button sits on the host page (draggable, position is remembered):
+
+![Floating bug report button on a host page](https://raw.githubusercontent.com/bybraveHQ/bug-report-widget/main/assets/widget-button.jpeg)
+
+Click it — the page freezes into an annotated screenshot with tools, screen recording and a destination picker:
+
+![Annotation toolbar with drawing tools, recording and download](https://raw.githubusercontent.com/bybraveHQ/bug-report-widget/main/assets/widget-annotator.jpeg)
+
 ## Build
 
 ```bash
