@@ -7,17 +7,11 @@
 - Network capture: `network: 'all'` mode, `XMLHttpRequest` support, request/response headers and bodies, sensitive header redaction
 - Console capture: failed resource loads (broken images/scripts/styles)
 - Annotation colors follow the report type
-- CI workflow (typecheck, lint, tests, build), unit tests, ESLint + Prettier
-
-## 0.1.6
-
-- Ko-fi funding link
 
 ## 0.1.5
 
 - Screenshot sent as JPEG to cut payload size
 - Shorter post-send linger, calmer "sent" label
-- npm publish workflow with OIDC trusted publishing
 
 ## 0.1.4
 
