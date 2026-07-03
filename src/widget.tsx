@@ -78,10 +78,12 @@ function isEditableTarget(e: Event): boolean {
 function drawAnnotation(
   ctx: CanvasRenderingContext2D,
   ann: Annotation | LiveDraw,
+  reportType: ReportType,
   selected = false,
 ) {
-  ctx.strokeStyle = selected ? '#3b82f6' : '#ef4444'
-  ctx.fillStyle = selected ? '#3b82f6' : '#ef4444'
+  const color = selected ? '#3b82f6' : reportType === 'bug' ? '#ef4444' : '#eab308'
+  ctx.strokeStyle = color
+  ctx.fillStyle = color
   ctx.lineWidth = selected ? 4 : 3
   ctx.setLineDash([])
 
@@ -341,11 +343,11 @@ export default function Widget({ config }: { config: ResolvedConfig }) {
       canvas.width = img.naturalWidth
       canvas.height = img.naturalHeight
       ctx.drawImage(img, 0, 0)
-      annotations.forEach((ann, i) => drawAnnotation(ctx, ann, i === selectedIndex))
-      if (liveDraw) drawAnnotation(ctx, liveDraw)
+      annotations.forEach((ann, i) => drawAnnotation(ctx, ann, reportType, i === selectedIndex))
+      if (liveDraw) drawAnnotation(ctx, liveDraw, reportType)
     }
     img.src = screenshotDataUrl
-  }, [phase, screenshotDataUrl, annotations, liveDraw, selectedIndex])
+  }, [phase, screenshotDataUrl, annotations, liveDraw, selectedIndex, reportType])
 
   const getXY = (e: JSX.TargetedMouseEvent<HTMLCanvasElement>): Point => {
     const canvas = canvasRef.current!
