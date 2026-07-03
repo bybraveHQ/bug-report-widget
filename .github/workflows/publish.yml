@@ -21,4 +21,6 @@ jobs:
       # OIDC trusted publishing требует npm >= 11.5.1
       - run: npm install -g npm@latest
       - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
       - run: npm publish
