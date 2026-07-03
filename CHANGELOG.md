@@ -7,6 +7,7 @@
 - Network capture: `network: 'all'` mode, `XMLHttpRequest` support, request/response headers and bodies, sensitive header redaction
 - Console capture: failed resource loads (broken images/scripts/styles)
 - Annotation colors follow the report type
+- Text size stepper: press and hold to change the value continuously
 
 ## 0.1.5
 

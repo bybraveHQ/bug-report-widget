@@ -71,6 +71,8 @@ const NOTICE_LINGER_MS = 5000
 const TEXT_SIZE_DEFAULT = 18
 const TEXT_SIZE_MIN = 8
 const TEXT_SIZE_MAX = 72
+const TEXT_SIZE_HOLD_DELAY_MS = 350
+const TEXT_SIZE_HOLD_INTERVAL_MS = 50
 const TEXT_INPUT_PADDING_PX = 8
 
 // `field-sizing: content` is Chromium-only, so the annotation text input is
@@ -282,6 +284,12 @@ export default function Widget({ config }: { config: ResolvedConfig }) {
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null)
   const [cursorDragging, setCursorDragging] = useState(false)
   const [textSize, setTextSize] = useState(TEXT_SIZE_DEFAULT)
+  const textSizeRef = useRef(TEXT_SIZE_DEFAULT)
+  const textSizeHoldRef = useRef<{
+    delay: ReturnType<typeof setTimeout> | null
+    interval: ReturnType<typeof setInterval> | null
+    repeated: boolean
+  }>({ delay: null, interval: null, repeated: false })
   const [destination, setDestination] = useState<'endpoint' | 'download'>(() => {
     if (!config.endpoint) return 'download'
     try {
@@ -660,8 +668,10 @@ export default function Widget({ config }: { config: ResolvedConfig }) {
     }
   }
 
-  const adjustTextSize = (delta: number) => {
-    const next = Math.max(TEXT_SIZE_MIN, Math.min(TEXT_SIZE_MAX, textSize + delta))
+  const adjustTextSize = (delta: number): boolean => {
+    const next = Math.max(TEXT_SIZE_MIN, Math.min(TEXT_SIZE_MAX, textSizeRef.current + delta))
+    if (next === textSizeRef.current) return false
+    textSizeRef.current = next
     setTextSize(next)
     const canvas = canvasRef.current
     if (canvas && pendingTextRef.current) {
@@ -669,6 +679,36 @@ export default function Widget({ config }: { config: ResolvedConfig }) {
       const fontSize = Math.round((next * canvas.width) / rect.width)
       setPendingText((p) => (p ? { ...p, fontSize } : p))
     }
+    return true
+  }
+
+  const startTextSizeHold = (delta: number) => {
+    stopTextSizeHold()
+    textSizeHoldRef.current.repeated = false
+    textSizeHoldRef.current.delay = setTimeout(() => {
+      textSizeHoldRef.current.interval = setInterval(() => {
+        textSizeHoldRef.current.repeated = true
+        if (!adjustTextSize(delta)) stopTextSizeHold()
+      }, TEXT_SIZE_HOLD_INTERVAL_MS)
+    }, TEXT_SIZE_HOLD_DELAY_MS)
+  }
+
+  const stopTextSizeHold = () => {
+    const hold = textSizeHoldRef.current
+    if (hold.delay !== null) clearTimeout(hold.delay)
+    if (hold.interval !== null) clearInterval(hold.interval)
+    hold.delay = null
+    hold.interval = null
+  }
+
+  useEffect(() => stopTextSizeHold, [])
+
+  const clickTextSize = (delta: number) => {
+    if (textSizeHoldRef.current.repeated) {
+      textSizeHoldRef.current.repeated = false
+      return
+    }
+    adjustTextSize(delta)
   }
 
   const confirmText = useCallback(() => {
@@ -916,7 +956,11 @@ export default function Widget({ config }: { config: ResolvedConfig }) {
             {tool === 'text' && (
               <div className="flex items-center rounded overflow-hidden border border-gray-600">
                 <button
-                  onClick={() => adjustTextSize(-1)}
+                  onClick={() => clickTextSize(-1)}
+                  onPointerDown={() => startTextSizeHold(-1)}
+                  onPointerUp={stopTextSizeHold}
+                  onPointerLeave={stopTextSizeHold}
+                  onPointerCancel={stopTextSizeHold}
                   aria-label={T.textSizeDecrease}
                   disabled={textSize <= TEXT_SIZE_MIN}
                   className="px-1.5 py-1 bg-gray-700 text-gray-300 hover:bg-gray-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors active:scale-95 disabled:active:scale-100"
@@ -927,7 +971,11 @@ export default function Widget({ config }: { config: ResolvedConfig }) {
                   {textSize}
                 </span>
                 <button
-                  onClick={() => adjustTextSize(1)}
+                  onClick={() => clickTextSize(1)}
+                  onPointerDown={() => startTextSizeHold(1)}
+                  onPointerUp={stopTextSizeHold}
+                  onPointerLeave={stopTextSizeHold}
+                  onPointerCancel={stopTextSizeHold}
                   aria-label={T.textSizeIncrease}
                   disabled={textSize >= TEXT_SIZE_MAX}
                   className="px-1.5 py-1 bg-gray-700 text-gray-300 hover:bg-gray-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors active:scale-95 disabled:active:scale-100"
