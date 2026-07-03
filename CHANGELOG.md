@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Screen recording is enabled by default; `video: false` (`data-video="false"`) hides the record button
+
 ## 0.2.0
 
 - Screen recording (opt-in `video: true`, max 60s, source/microphone settings, red frame + timer)

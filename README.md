@@ -32,7 +32,7 @@ Or straight from a CDN, no build step:
 ></script>
 ```
 
-Attributes: `data-endpoint` (required unless `data-destination="download"`), `data-destination="download"` (save the report as a .zip to the user's computer instead of POSTing), `data-download="false"` (hide the Download option — reports can only be sent to the endpoint), `data-video="true"` (screen recording button, max 60s), `data-network="all"` (capture every request, not just failed ones), `data-hotkey="false"` (disable Cmd/Ctrl+B), `data-credentials="include"`.
+Attributes: `data-endpoint` (required unless `data-destination="download"`), `data-destination="download"` (save the report as a .zip to the user's computer instead of POSTing), `data-download="false"` (hide the Download option — reports can only be sent to the endpoint), `data-video="false"` (hide the screen recording button, enabled by default), `data-network="all"` (capture every request, not just failed ones), `data-hotkey="false"` (disable Cmd/Ctrl+B), `data-credentials="include"`.
 
 Manual initialization instead of attributes:
 
@@ -78,7 +78,7 @@ init({
   endpoint: '/api/reports',        // required unless destination is 'download'
   destination: 'endpoint',         // default destination: 'endpoint' (POST) | 'download' (.zip)
   download: true,                  // false hides the Download option, reports go to `endpoint` only
-  video: false,                    // screen recording button (max 60s per recording)
+  video: true,                     // screen recording button (max 60s per recording), false hides it
   network: 'errors',               // network capture: 'errors' (failed requests only) | 'all' (every request)
   headers: { 'X-Api-Key': '...' }, // optional
   credentials: 'include',          // optional (RequestCredentials)
@@ -89,7 +89,7 @@ init({
 
 ### Video recording
 
-With `video: true` a record button appears in the annotation toolbar (labeled with the 1:00 limit). Recording uses the browser's screen-share picker (`getDisplayMedia`), shows a red frame with a live timer, and stops automatically at 60 seconds — the recorded video is kept and attached, and the user sees a notice about the limit. The video is sent as `video.webm` alongside the screenshot.
+A record button appears in the annotation toolbar (labeled with the 1:00 limit); `video: false` hides it. Recording uses the browser's screen-share picker (`getDisplayMedia`), shows a red frame with a live timer, and stops automatically at 60 seconds — the recorded video is kept and attached, and the user sees a notice about the limit. The video is sent as `video.webm` alongside the screenshot.
 
 The arrow next to the record button opens recording settings (remembered in localStorage):
 
