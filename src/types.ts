@@ -38,6 +38,21 @@ export interface Labels {
   errorRecord: string
 }
 
+export type ButtonPosition =
+  | 'left'
+  | 'right'
+  | 'top-left'
+  | 'top-right'
+  | 'bottom-left'
+  | 'bottom-right'
+  | { x: number; y: number }
+
+export interface SubmitInfo {
+  type: 'bug' | 'improvement'
+  description: string
+  destination: 'endpoint' | 'download'
+}
+
 export interface BugReportConfig {
   /** Endpoint URL accepting the multipart/form-data report. Required unless `destination` is 'download' */
   endpoint?: string
@@ -59,8 +74,23 @@ export interface BugReportConfig {
   network?: 'errors' | 'all'
   headers?: Record<string, string>
   credentials?: RequestCredentials
-  /** Cmd/Ctrl+B hotkey, enabled by default */
-  hotkey?: boolean
+  /**
+   * Cmd/Ctrl+B hotkey, enabled by default. False disables it; a single
+   * letter/digit picks another key (e.g. 'k' → Cmd/Ctrl+K).
+   */
+  hotkey?: boolean | string
+  /**
+   * Initial position of the floating button: an edge/corner preset or exact
+   * pixel coordinates ({ x, y } of the top-left corner). Once the user drags
+   * the button, the dragged position is stored in localStorage and wins.
+   */
+  position?: ButtonPosition
+  /** Called after a report is successfully sent or downloaded */
+  onSubmit?: (report: SubmitInfo) => void
+  /** Called when preparing or sending a report fails */
+  onError?: (error: unknown) => void
+  /** JPEG quality of the screenshot, 0–1 (default 0.85) */
+  screenshotQuality?: number
   labels?: Partial<Labels>
 }
 
@@ -72,7 +102,12 @@ export interface ResolvedConfig {
   network: 'errors' | 'all'
   headers?: Record<string, string>
   credentials?: RequestCredentials
-  hotkey: boolean
+  /** Normalized hotkey: an uppercase letter/digit, or false when disabled */
+  hotkey: string | false
+  position: ButtonPosition
+  onSubmit?: (report: SubmitInfo) => void
+  onError?: (error: unknown) => void
+  screenshotQuality: number
   labels: Labels
 }
 

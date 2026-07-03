@@ -2,11 +2,44 @@ import { h, render } from 'preact'
 import cssText from './styles.css?inline'
 import Widget from './widget'
 import { teardownInterceptors } from './capture-interceptors'
-import { defaultLabels, type BugReportConfig, type ResolvedConfig } from './types'
+import {
+  defaultLabels,
+  type BugReportConfig,
+  type ButtonPosition,
+  type ResolvedConfig,
+} from './types'
 
-export type { BugReportConfig, Labels } from './types'
+export type { BugReportConfig, ButtonPosition, Labels, SubmitInfo } from './types'
 
 const HOST_ID = 'bug-report-widget'
+const SCREENSHOT_QUALITY_DEFAULT = 0.85
+const POSITION_PRESETS = ['left', 'right', 'top-left', 'top-right', 'bottom-left', 'bottom-right']
+
+function resolveHotkey(hotkey: boolean | string | undefined): string | false {
+  if (hotkey === false) return false
+  if (typeof hotkey === 'string') {
+    const key = hotkey.trim().toUpperCase()
+    if (/^[A-Z0-9]$/.test(key)) return key
+    console.warn(`[bug-report-widget] init: invalid hotkey "${hotkey}", falling back to B`)
+  }
+  return 'B'
+}
+
+function resolvePosition(position: BugReportConfig['position']): ButtonPosition {
+  if (position && typeof position === 'object') {
+    const x = Number(position.x)
+    const y = Number(position.y)
+    if (Number.isFinite(x) && Number.isFinite(y)) return { x, y }
+  }
+  if (typeof position === 'string' && POSITION_PRESETS.includes(position)) return position
+  return 'left'
+}
+
+function resolveScreenshotQuality(quality: number | undefined): number {
+  return typeof quality === 'number' && quality > 0 && quality <= 1
+    ? quality
+    : SCREENSHOT_QUALITY_DEFAULT
+}
 const PROPERTY_STYLE_ID = 'bug-report-widget-properties'
 
 let host: HTMLElement | null = null
@@ -46,7 +79,11 @@ export function init(config: BugReportConfig): void {
     network: config.network === 'all' ? 'all' : 'errors',
     headers: config.headers,
     credentials: config.credentials,
-    hotkey: config.hotkey !== false,
+    hotkey: resolveHotkey(config.hotkey),
+    position: resolvePosition(config.position),
+    onSubmit: config.onSubmit,
+    onError: config.onError,
+    screenshotQuality: resolveScreenshotQuality(config.screenshotQuality),
     labels: { ...defaultLabels, ...config.labels },
   }
 
@@ -92,7 +129,11 @@ if (typeof document !== 'undefined') {
         download: script?.dataset.download !== 'false',
         video: script?.dataset.video !== 'false',
         network: script?.dataset.network === 'all' ? 'all' : 'errors',
-        hotkey: script?.dataset.hotkey !== 'false',
+        hotkey: script?.dataset.hotkey === 'false' ? false : (script?.dataset.hotkey ?? true),
+        position: script?.dataset.position as ButtonPosition | undefined,
+        screenshotQuality: script?.dataset.screenshotQuality
+          ? Number(script.dataset.screenshotQuality)
+          : undefined,
         credentials: script?.dataset.credentials as RequestCredentials | undefined,
       })
     if (document.body) start()

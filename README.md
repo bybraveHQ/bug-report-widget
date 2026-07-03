@@ -32,7 +32,7 @@ Or straight from a CDN, no build step:
 ></script>
 ```
 
-Attributes: `data-endpoint` (required unless `data-destination="download"`), `data-destination="download"` (save the report as a .zip to the user's computer instead of POSTing), `data-download="false"` (hide the Download option — reports can only be sent to the endpoint), `data-video="false"` (hide the screen recording button, enabled by default), `data-network="all"` (capture every request, not just failed ones), `data-hotkey="false"` (disable Cmd/Ctrl+B), `data-credentials="include"`.
+Attributes: `data-endpoint` (required unless `data-destination="download"`), `data-destination="download"` (save the report as a .zip to the user's computer instead of POSTing), `data-download="false"` (hide the Download option — reports can only be sent to the endpoint), `data-video="false"` (hide the screen recording button, enabled by default), `data-network="all"` (capture every request, not just failed ones), `data-hotkey="false"` (disable Cmd/Ctrl+B) or `data-hotkey="k"` (remap to Cmd/Ctrl+K), `data-position="bottom-right"` (initial button position), `data-screenshot-quality="0.7"` (screenshot JPEG quality, 0–1), `data-credentials="include"`.
 
 Manual initialization instead of attributes:
 
@@ -82,10 +82,18 @@ init({
   network: 'errors',               // network capture: 'errors' (failed requests only) | 'all' (every request)
   headers: { 'X-Api-Key': '...' }, // optional
   credentials: 'include',          // optional (RequestCredentials)
-  hotkey: true,                    // Cmd/Ctrl+B, defaults to true
+  hotkey: true,                    // Cmd/Ctrl+B; false disables, 'k' remaps to Cmd/Ctrl+K
+  position: 'left',                // initial button position, see below
+  onSubmit: (report) => {},        // after a report is sent or downloaded
+  onError: (error) => {},          // when capture or sending fails
+  screenshotQuality: 0.85,         // screenshot JPEG quality, 0–1
   labels: { send: 'Submit' },      // partial override of any label
 })
 ```
+
+`position` accepts an edge/corner preset — `'left'` (default), `'right'`, `'top-left'`, `'top-right'`, `'bottom-left'`, `'bottom-right'` — or exact pixel coordinates `{ x, y }`. It only sets the starting point: the user can drag the button anywhere, and the dragged position is remembered in localStorage.
+
+`onSubmit` receives `{ type, description, destination }`; `onError` receives the thrown error. Useful for host-side toasts or analytics.
 
 ### Video recording
 

@@ -3,6 +3,10 @@
 ## Unreleased
 
 - Screen recording is enabled by default; `video: false` (`data-video="false"`) hides the record button
+- `position` option (`data-position`): initial button position — edge/corner preset or `{ x, y }`
+- Custom hotkey: `hotkey: 'k'` (`data-hotkey="k"`) remaps Cmd/Ctrl+B to another letter/digit
+- `onSubmit` / `onError` callbacks for host-side toasts and analytics
+- `screenshotQuality` option (`data-screenshot-quality`): screenshot JPEG quality, 0–1
 
 ## 0.2.0
 
