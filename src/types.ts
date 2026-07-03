@@ -53,7 +53,7 @@ export interface BugReportConfig {
    * (requires `endpoint`).
    */
   download?: boolean
-  /** Screen recording button (max 60s per recording), disabled by default */
+  /** Screen recording button (max 60s per recording), enabled by default. Set to false to hide */
   video?: boolean
   /** Network capture: only failed requests ('errors', default) or every request ('all') */
   network?: 'errors' | 'all'
