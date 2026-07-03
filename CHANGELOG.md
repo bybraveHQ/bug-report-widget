@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.0
 
 - Screen recording is enabled by default; `video: false` (`data-video="false"`) hides the record button
 - `position` option (`data-position`): initial button position — edge/corner preset or `{ x, y }`
