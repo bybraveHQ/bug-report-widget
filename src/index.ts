@@ -27,7 +27,9 @@ function injectPropertyRules(): void {
 }
 
 export function init(config: BugReportConfig): void {
-  const destination = config?.destination === 'download' ? 'download' : 'endpoint'
+  const download = config?.download !== false
+  const destination =
+    download && config?.destination === 'download' ? 'download' : 'endpoint'
   if (destination === 'endpoint' && !config?.endpoint) {
     console.error(
       '[bug-report-widget] init: `endpoint` is required unless `destination` is "download"',
@@ -39,6 +41,7 @@ export function init(config: BugReportConfig): void {
   const resolved: ResolvedConfig = {
     endpoint: config.endpoint,
     destination,
+    download,
     video: config.video === true,
     network: config.network === 'all' ? 'all' : 'errors',
     headers: config.headers,
@@ -86,6 +89,7 @@ if (typeof document !== 'undefined') {
       init({
         endpoint,
         destination,
+        download: script?.dataset.download !== 'false',
         video: script?.dataset.video === 'true',
         network: script?.dataset.network === 'all' ? 'all' : 'errors',
         hotkey: script?.dataset.hotkey !== 'false',

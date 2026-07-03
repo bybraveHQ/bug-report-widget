@@ -47,6 +47,12 @@ export interface BugReportConfig {
    * from the widget toolbar; without `endpoint` only 'download' is available.
    */
   destination?: 'endpoint' | 'download'
+  /**
+   * Allow saving the report as a .zip download, enabled by default. Set to
+   * false to hide the destination picker and always send to `endpoint`
+   * (requires `endpoint`).
+   */
+  download?: boolean
   /** Screen recording button (max 60s per recording), disabled by default */
   video?: boolean
   /** Network capture: only failed requests ('errors', default) or every request ('all') */
@@ -61,6 +67,7 @@ export interface BugReportConfig {
 export interface ResolvedConfig {
   endpoint?: string
   destination: 'endpoint' | 'download'
+  download: boolean
   video: boolean
   network: 'errors' | 'all'
   headers?: Record<string, string>

@@ -8,6 +8,7 @@
 - Console capture: failed resource loads (broken images/scripts/styles)
 - Annotation colors follow the report type
 - Text size stepper: press and hold to change the value continuously
+- `download: false` option (`data-download="false"`) hides the Download destination, reports go to the endpoint only
 
 ## 0.1.5
 
