@@ -27,7 +27,7 @@ import {
 import { createZip, type ZipEntry } from './zip'
 import { type Annotation, type RectAnn, type ArrowAnn, hitTest, moveAnnotation } from './geometry'
 import { initInterceptors, getConsoleLogs, getNetworkRequests } from './capture-interceptors'
-import type { ResolvedConfig } from './types'
+import type { ButtonPosition, ResolvedConfig } from './types'
 
 type Phase = 'idle' | 'capturing' | 'annotating' | 'recording'
 type Tool = 'cursor' | 'rect' | 'arrow' | 'pencil' | 'text'
@@ -90,7 +90,30 @@ function formatSeconds(total: number): string {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
 }
 
-async function captureViewport(): Promise<string> {
+const BUTTON_MARGIN_PX = 24
+
+function initialButtonPos(position: ButtonPosition): { x: number; y: number } {
+  if (typeof position === 'object') return position
+  const rightX = window.innerWidth - BUTTON_SIZE_PX - BUTTON_MARGIN_PX
+  const bottomY = window.innerHeight - BUTTON_SIZE_PX - BUTTON_MARGIN_PX
+  const centerY = Math.round(window.innerHeight / 2)
+  switch (position) {
+    case 'right':
+      return { x: rightX, y: centerY }
+    case 'top-left':
+      return { x: BUTTON_MARGIN_PX, y: BUTTON_MARGIN_PX }
+    case 'top-right':
+      return { x: rightX, y: BUTTON_MARGIN_PX }
+    case 'bottom-left':
+      return { x: BUTTON_MARGIN_PX, y: bottomY }
+    case 'bottom-right':
+      return { x: rightX, y: bottomY }
+    default:
+      return { x: BUTTON_MARGIN_PX, y: centerY }
+  }
+}
+
+async function captureViewport(quality: number): Promise<string> {
   const { snapdom } = await import('@zumer/snapdom')
   // The output is cropped to the viewport, so subtrees that start below it
   // don't need to be cloned at all — on long pages this is the difference
@@ -127,7 +150,7 @@ async function captureViewport(): Promise<string> {
     out.width,
     out.height,
   )
-  return out.toDataURL('image/jpeg', 0.85)
+  return out.toDataURL('image/jpeg', quality)
 }
 
 // Events from shadow DOM are retargeted to the host — get the real element via composedPath
@@ -359,7 +382,11 @@ export default function Widget({ config }: { config: ResolvedConfig }) {
           y: Math.max(0, Math.min(window.innerHeight - BUTTON_SIZE_PX, p.y)),
         })
       } else {
-        setPos({ x: 24, y: Math.round(window.innerHeight / 2) })
+        const p = initialButtonPos(config.position)
+        setPos({
+          x: Math.max(0, Math.min(window.innerWidth - BUTTON_SIZE_PX, p.x)),
+          y: Math.max(0, Math.min(window.innerHeight - BUTTON_SIZE_PX, p.y)),
+        })
       }
     } catch {
       /* ignore */
@@ -422,7 +449,7 @@ export default function Widget({ config }: { config: ResolvedConfig }) {
     if (buttonRef.current) buttonRef.current.style.visibility = 'hidden'
     await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))
     try {
-      const dataUrl = await captureViewport()
+      const dataUrl = await captureViewport(config.screenshotQuality)
       setScreenshotDataUrl(dataUrl)
       setAnnotations([])
       setLiveDraw(null)
@@ -437,9 +464,14 @@ export default function Widget({ config }: { config: ResolvedConfig }) {
       setVideoBlob(null)
       setVideoDurationSec(0)
       setPhase('annotating')
-    } catch {
+    } catch (err) {
       setError(T.errorCapture)
       setPhase('idle')
+      try {
+        config.onError?.(err)
+      } catch {
+        /* a throwing host callback must not break the widget */
+      }
     } finally {
       if (buttonRef.current) buttonRef.current.style.visibility = 'visible'
     }
@@ -584,10 +616,12 @@ export default function Widget({ config }: { config: ResolvedConfig }) {
   }, [descriptionOpen])
 
   useEffect(() => {
-    if (!config.hotkey) return
+    const hotkey = config.hotkey
+    if (!hotkey) return
+    // e.code, not e.key: the hotkey has to work on non-latin keyboard layouts
+    const code = /^[0-9]$/.test(hotkey) ? `Digit${hotkey}` : `Key${hotkey}`
     const onKeyDown = (e: KeyboardEvent) => {
-      // e.code, not e.key: the hotkey has to work on non-latin keyboard layouts
-      if ((!e.metaKey && !e.ctrlKey) || e.code !== 'KeyB') return
+      if ((!e.metaKey && !e.ctrlKey) || e.code !== code) return
       if (isEditableTarget(e)) return
       e.preventDefault()
       triggerCapture()
@@ -866,16 +900,26 @@ export default function Widget({ config }: { config: ResolvedConfig }) {
         if (destination === 'download') await downloadReport(data)
         else await submitReport(config, data)
         setSent(true)
+        try {
+          config.onSubmit?.({ type: reportType, description, destination })
+        } catch {
+          /* a throwing host callback must not break the widget */
+        }
         setTimeout(() => {
           setPhase('idle')
           setSent(false)
         }, SENT_LINGER_MS)
-      } catch {
+      } catch (err) {
         setError(T.errorSend)
+        try {
+          config.onError?.(err)
+        } catch {
+          /* a throwing host callback must not break the widget */
+        }
       } finally {
         setSubmitting(false)
       }
-    }, 'image/jpeg', 0.85)
+    }, 'image/jpeg', config.screenshotQuality)
   }
 
   const toolButtons = [
