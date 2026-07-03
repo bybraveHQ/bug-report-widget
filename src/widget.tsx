@@ -292,6 +292,7 @@ export default function Widget({ config }: { config: ResolvedConfig }) {
   }>({ delay: null, interval: null, repeated: false })
   const [destination, setDestination] = useState<'endpoint' | 'download'>(() => {
     if (!config.endpoint) return 'download'
+    if (!config.download) return 'endpoint'
     try {
       const saved = localStorage.getItem(DEST_STORAGE_KEY)
       if (saved === 'endpoint' || saved === 'download') return saved
@@ -1079,7 +1080,7 @@ export default function Widget({ config }: { config: ResolvedConfig }) {
               <button
                 onClick={handleSubmit}
                 disabled={submitting || sent}
-                className={`flex items-center gap-1 px-3 py-1.5 text-xs font-medium disabled:opacity-60 transition-colors active:scale-95 disabled:active:scale-100 ${config.endpoint ? 'rounded-l' : 'rounded'} ${reportType === 'bug' ? 'bg-red-600 hover:bg-red-500' : 'bg-yellow-600 hover:bg-yellow-500'}`}
+                className={`flex items-center gap-1 px-3 py-1.5 text-xs font-medium disabled:opacity-60 transition-colors active:scale-95 disabled:active:scale-100 ${config.endpoint && config.download ? 'rounded-l' : 'rounded'} ${reportType === 'bug' ? 'bg-red-600 hover:bg-red-500' : 'bg-yellow-600 hover:bg-yellow-500'}`}
               >
                 {sent ? (
                   T.sent
@@ -1095,7 +1096,7 @@ export default function Widget({ config }: { config: ResolvedConfig }) {
                   </>
                 )}
               </button>
-              {config.endpoint && (
+              {config.endpoint && config.download && (
                 <button
                   title={T.destinationTitle}
                   onClick={() => setDestMenuOpen((o) => !o)}
