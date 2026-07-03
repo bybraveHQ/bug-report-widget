@@ -183,7 +183,7 @@ export async function POST(req: NextRequest) {
 - Floating draggable button (position persisted in localStorage), mouse and touch
 - Cmd/Ctrl+B hotkey (layout-independent, ignored inside inputs and rich-text editors)
 - Screenshot via [snapdom](https://github.com/zumerlab/snapdom) (no browser permissions needed)
-- Tools: select/move, rectangle, arrow, pencil, text (adjustable size); Undo (Cmd/Ctrl+Z), Clear
+- Tools: select/move, rectangle, arrow, pencil (adjustable line thickness), text (adjustable size); Undo (Cmd/Ctrl+Z), Clear
 - Screen recording (opt-in, max 60s, auto-stop with notice, red recording frame + timer)
 - Report type: Bug / Improvement
 - Destination: POST to your endpoint or a .zip download (no backend required)

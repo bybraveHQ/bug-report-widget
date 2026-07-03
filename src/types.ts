@@ -22,6 +22,7 @@ export interface Labels {
   close: string
   textSizeDecrease: string
   textSizeIncrease: string
+  strokeWidth: string
   record: string
   recordVideo: string
   stopRecording: string
@@ -135,6 +136,7 @@ export const defaultLabels: Labels = {
   close: 'Close',
   textSizeDecrease: 'Smaller text',
   textSizeIncrease: 'Larger text',
+  strokeWidth: 'Line thickness',
   record: 'Record',
   recordVideo: 'Record video (max 1:00)',
   stopRecording: 'Stop',
