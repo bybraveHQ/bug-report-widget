@@ -13,12 +13,23 @@ import {
   Undo2,
   MousePointer2,
   Trash2,
+  Video,
+  Download,
+  Minus,
+  Plus,
+  ChevronDown,
+  Check,
+  Monitor,
+  AppWindow,
+  PanelTop,
+  Mic,
 } from 'lucide-preact'
+import { createZip, type ZipEntry } from './zip'
 import { type Annotation, type RectAnn, type ArrowAnn, hitTest, moveAnnotation } from './geometry'
 import { initInterceptors, getConsoleLogs, getNetworkRequests } from './capture-interceptors'
 import type { ResolvedConfig } from './types'
 
-type Phase = 'idle' | 'capturing' | 'annotating'
+type Phase = 'idle' | 'capturing' | 'annotating' | 'recording'
 type Tool = 'cursor' | 'rect' | 'arrow' | 'pencil' | 'text'
 type ReportType = 'bug' | 'improvement'
 
@@ -31,10 +42,51 @@ type PencilAnn = { tool: 'pencil'; points: Point[] }
 type LiveDraw = RectAnn | ArrowAnn | PencilAnn
 
 const STORAGE_KEY = 'bug-report-widget-pos'
+const DEST_STORAGE_KEY = 'bug-report-widget-dest'
+const REC_STORAGE_KEY = 'bug-report-widget-rec'
+
+// Floating button footprint used to clamp its position to the viewport
+const BUTTON_SIZE_PX = 48
+
+type RecordSource = 'monitor' | 'window' | 'browser'
+
+function loadRecordSettings(): { source: RecordSource; mic: boolean } {
+  try {
+    const saved = JSON.parse(localStorage.getItem(REC_STORAGE_KEY) ?? '{}')
+    return {
+      source: ['monitor', 'window', 'browser'].includes(saved.source) ? saved.source : 'monitor',
+      mic: saved.mic === true,
+    }
+  } catch {
+    return { source: 'monitor', mic: false }
+  }
+}
 
 // Keep the success state visible just long enough to register, then get out
 // of the user's way.
 const SENT_LINGER_MS = 800
+
+const VIDEO_MAX_SEC = 60
+const NOTICE_LINGER_MS = 5000
+const TEXT_SIZE_DEFAULT = 18
+const TEXT_SIZE_MIN = 8
+const TEXT_SIZE_MAX = 72
+const TEXT_INPUT_PADDING_PX = 8
+
+// `field-sizing: content` is Chromium-only, so the annotation text input is
+// sized manually: width from measuring the text, height from scrollHeight.
+let measureCtx: CanvasRenderingContext2D | null = null
+function measureTextWidth(text: string, fontSize: number): number {
+  if (!measureCtx) measureCtx = document.createElement('canvas').getContext('2d')
+  if (!measureCtx) return 0
+  measureCtx.font = `bold ${fontSize}px sans-serif`
+  return Math.max(0, ...text.split('\n').map((line) => measureCtx!.measureText(line).width))
+}
+
+function formatSeconds(total: number): string {
+  const s = Math.max(0, Math.floor(total))
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
+}
 
 async function captureViewport(): Promise<string> {
   const { snapdom } = await import('@zumer/snapdom')
@@ -55,7 +107,14 @@ async function captureViewport(): Promise<string> {
   const out = document.createElement('canvas')
   out.width = Math.round(window.innerWidth * dpr)
   out.height = Math.round(vh * dpr)
-  out.getContext('2d')!.drawImage(
+  const ctx = out.getContext('2d')!
+  // If the document is shorter than the viewport, the uncovered area stays
+  // transparent and turns black in the JPEG export — pre-fill with the page
+  // background instead.
+  const bodyBg = getComputedStyle(document.body).backgroundColor
+  ctx.fillStyle = bodyBg && bodyBg !== 'rgba(0, 0, 0, 0)' ? bodyBg : '#ffffff'
+  ctx.fillRect(0, 0, out.width, out.height)
+  ctx.drawImage(
     full,
     Math.round(window.scrollX * dpr),
     Math.round(window.scrollY * dpr),
@@ -72,7 +131,11 @@ async function captureViewport(): Promise<string> {
 // Events from shadow DOM are retargeted to the host — get the real element via composedPath
 function isEditableTarget(e: Event): boolean {
   const target = e.composedPath()[0]
-  return target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement
+  return (
+    target instanceof HTMLInputElement ||
+    target instanceof HTMLTextAreaElement ||
+    (target instanceof HTMLElement && target.isContentEditable)
+  )
 }
 
 function drawAnnotation(
@@ -126,31 +189,73 @@ function drawAnnotation(
   }
 }
 
-async function submitReport(
-  config: ResolvedConfig,
-  data: {
-    screenshot: Blob
-    description: string
-    type: ReportType
-    consoleLogs: string
-    networkRequests: string
-  },
-): Promise<void> {
+interface ReportData {
+  screenshot: Blob
+  video: Blob | null
+  description: string
+  type: ReportType
+  consoleLogs: string
+  networkRequests: string
+}
+
+// Environment snapshot attached to every report
+function collectMeta() {
+  return {
+    user_agent: navigator.userAgent,
+    language: navigator.language,
+    viewport: `${window.innerWidth}x${window.innerHeight}`,
+    screen: `${screen.width}x${screen.height}`,
+    device_pixel_ratio: window.devicePixelRatio,
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+  }
+}
+
+async function submitReport(config: ResolvedConfig, data: ReportData): Promise<void> {
   const form = new FormData()
   form.append('screenshot', data.screenshot, 'screenshot.jpg')
+  if (data.video) form.append('video', data.video, 'video.webm')
   form.append('url', window.location.href)
   form.append('page_title', document.title)
   form.append('description', data.description)
   form.append('type', data.type)
   form.append('console_logs', data.consoleLogs)
   form.append('network_requests', data.networkRequests)
-  const res = await fetch(config.endpoint, {
+  form.append('meta', JSON.stringify(collectMeta()))
+  const res = await fetch(config.endpoint!, {
     method: 'POST',
     body: form,
     headers: config.headers,
     credentials: config.credentials,
   })
   if (!res.ok) throw new Error(`Report submit failed: ${res.status}`)
+}
+
+async function downloadReport(data: ReportData): Promise<void> {
+  const report = {
+    url: window.location.href,
+    page_title: document.title,
+    type: data.type,
+    description: data.description,
+    created_at: new Date().toISOString(),
+    meta: collectMeta(),
+    console_logs: JSON.parse(data.consoleLogs),
+    network_requests: JSON.parse(data.networkRequests),
+  }
+  const entries: ZipEntry[] = [
+    { name: 'screenshot.jpg', data: new Uint8Array(await data.screenshot.arrayBuffer()) },
+    { name: 'report.json', data: new TextEncoder().encode(JSON.stringify(report, null, 2)) },
+  ]
+  if (data.video) {
+    entries.push({ name: 'video.webm', data: new Uint8Array(await data.video.arrayBuffer()) })
+  }
+  const stamp = new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-')
+  const url = URL.createObjectURL(createZip(entries))
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `bug-report-${stamp}.zip`
+  a.click()
+  // Revoke after the download has had a chance to start
+  setTimeout(() => URL.revokeObjectURL(url), 10_000)
 }
 
 export default function Widget({ config }: { config: ResolvedConfig }) {
@@ -173,11 +278,31 @@ export default function Widget({ config }: { config: ResolvedConfig }) {
   const [submitting, setSubmitting] = useState(false)
   const [sent, setSent] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null)
   const [cursorDragging, setCursorDragging] = useState(false)
+  const [textSize, setTextSize] = useState(TEXT_SIZE_DEFAULT)
+  const [destination, setDestination] = useState<'endpoint' | 'download'>(() => {
+    if (!config.endpoint) return 'download'
+    try {
+      const saved = localStorage.getItem(DEST_STORAGE_KEY)
+      if (saved === 'endpoint' || saved === 'download') return saved
+    } catch {
+      /* ignore */
+    }
+    return config.destination
+  })
+  const [destMenuOpen, setDestMenuOpen] = useState(false)
+  const [recSettings, setRecSettings] = useState(loadRecordSettings)
+  const [recMenuOpen, setRecMenuOpen] = useState(false)
+  const [videoBlob, setVideoBlob] = useState<Blob | null>(null)
+  const [videoDurationSec, setVideoDurationSec] = useState(0)
+  const [recordElapsed, setRecordElapsed] = useState(0)
 
   const buttonRef = useRef<HTMLButtonElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const stageRef = useRef<HTMLDivElement>(null)
+  const [canvasCss, setCanvasCss] = useState<{ w: number; h: number } | null>(null)
   const textInputRef = useRef<HTMLTextAreaElement>(null)
   const pendingTextRef = useRef<typeof pendingText>(null)
   const hasDragged = useRef(false)
@@ -190,16 +315,25 @@ export default function Widget({ config }: { config: ResolvedConfig }) {
   const cursorDragOrigin = useRef<Point | null>(null)
   const cursorDragAnnSnap = useRef<Annotation | null>(null)
   const cursorDragIdx = useRef<number | null>(null)
+  const recorderRef = useRef<MediaRecorder | null>(null)
+  const recordStreamRef = useRef<MediaStream | null>(null)
+  const recordChunksRef = useRef<Blob[]>([])
+  const recordTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const recordStartedAtRef = useRef(0)
+  const recordLimitHitRef = useRef(false)
   useEffect(() => {
     pendingTextRef.current = pendingText
   }, [pendingText])
 
+  // Re-measure on font size changes too, or the text overflows the underline
   useEffect(() => {
     const el = textInputRef.current
     if (!el) return
+    const width = measureTextWidth(pendingText?.value ?? '', textSize) + TEXT_INPUT_PADDING_PX
+    el.style.width = Math.ceil(width) + 'px' // min-w/max-w classes clamp it
     el.style.height = 'auto'
     el.style.height = el.scrollHeight + 'px'
-  }, [pendingText?.value])
+  }, [pendingText?.value, textSize])
 
   // Focus the new text input (replaces flushSync + focus from the React version)
   useEffect(() => {
@@ -212,8 +346,8 @@ export default function Widget({ config }: { config: ResolvedConfig }) {
       if (saved) {
         const p = JSON.parse(saved)
         setPos({
-          x: Math.max(0, Math.min(window.innerWidth - 48, p.x)),
-          y: Math.max(0, Math.min(window.innerHeight - 48, p.y)),
+          x: Math.max(0, Math.min(window.innerWidth - BUTTON_SIZE_PX, p.x)),
+          y: Math.max(0, Math.min(window.innerHeight - BUTTON_SIZE_PX, p.y)),
         })
       } else {
         setPos({ x: 24, y: Math.round(window.innerHeight / 2) })
@@ -223,8 +357,23 @@ export default function Widget({ config }: { config: ResolvedConfig }) {
     }
   }, [])
 
-  const handleMouseDown = useCallback(
-    (e: JSX.TargetedMouseEvent<HTMLButtonElement>) => {
+  // Keep the button inside the viewport when the window shrinks
+  useEffect(() => {
+    const clamp = () =>
+      setPos((p) =>
+        p
+          ? {
+              x: Math.max(0, Math.min(window.innerWidth - BUTTON_SIZE_PX, p.x)),
+              y: Math.max(0, Math.min(window.innerHeight - BUTTON_SIZE_PX, p.y)),
+            }
+          : p,
+      )
+    window.addEventListener('resize', clamp)
+    return () => window.removeEventListener('resize', clamp)
+  }, [])
+
+  const handleButtonPointerDown = useCallback(
+    (e: JSX.TargetedPointerEvent<HTMLButtonElement>) => {
       hasDragged.current = false
       dragStart.current = {
         mouseX: e.clientX,
@@ -233,14 +382,14 @@ export default function Widget({ config }: { config: ResolvedConfig }) {
         btnY: pos?.y ?? 0,
       }
 
-      const onMove = (ev: MouseEvent) => {
+      const onMove = (ev: PointerEvent) => {
         if (!dragStart.current) return
         const dx = ev.clientX - dragStart.current.mouseX
         const dy = ev.clientY - dragStart.current.mouseY
         if (Math.abs(dx) > 3 || Math.abs(dy) > 3) hasDragged.current = true
         setPos({
-          x: Math.max(0, Math.min(window.innerWidth - 48, dragStart.current.btnX + dx)),
-          y: Math.max(0, Math.min(window.innerHeight - 48, dragStart.current.btnY + dy)),
+          x: Math.max(0, Math.min(window.innerWidth - BUTTON_SIZE_PX, dragStart.current.btnX + dx)),
+          y: Math.max(0, Math.min(window.innerHeight - BUTTON_SIZE_PX, dragStart.current.btnY + dy)),
         })
       }
       const onUp = () => {
@@ -249,11 +398,11 @@ export default function Widget({ config }: { config: ResolvedConfig }) {
           return p
         })
         dragStart.current = null
-        window.removeEventListener('mousemove', onMove)
-        window.removeEventListener('mouseup', onUp)
+        window.removeEventListener('pointermove', onMove)
+        window.removeEventListener('pointerup', onUp)
       }
-      window.addEventListener('mousemove', onMove)
-      window.addEventListener('mouseup', onUp)
+      window.addEventListener('pointermove', onMove)
+      window.addEventListener('pointerup', onUp)
     },
     [pos],
   )
@@ -274,7 +423,10 @@ export default function Widget({ config }: { config: ResolvedConfig }) {
       setReportType('bug')
       setSent(false)
       setError(null)
+      setNotice(null)
       setSelectedIndex(null)
+      setVideoBlob(null)
+      setVideoDurationSec(0)
       setPhase('annotating')
     } catch {
       setError(T.errorCapture)
@@ -289,7 +441,121 @@ export default function Widget({ config }: { config: ResolvedConfig }) {
     await triggerCapture()
   }, [triggerCapture])
 
-  useEffect(() => { initInterceptors() }, [])
+  useEffect(() => { initInterceptors(config.network) }, [config.network])
+
+  useEffect(() => {
+    if (!notice) return
+    const t = setTimeout(() => setNotice(null), NOTICE_LINGER_MS)
+    return () => clearTimeout(t)
+  }, [notice])
+
+  useEffect(() => {
+    if (!destMenuOpen && !recMenuOpen) return
+    const close = () => {
+      setDestMenuOpen(false)
+      setRecMenuOpen(false)
+    }
+    window.addEventListener('click', close)
+    return () => window.removeEventListener('click', close)
+  }, [destMenuOpen, recMenuOpen])
+
+  const updateRecSettings = (patch: Partial<typeof recSettings>) => {
+    setRecSettings((prev) => {
+      const next = { ...prev, ...patch }
+      try {
+        localStorage.setItem(REC_STORAGE_KEY, JSON.stringify(next))
+      } catch {
+        /* ignore */
+      }
+      return next
+    })
+  }
+
+  const stopRecording = useCallback(() => {
+    const recorder = recorderRef.current
+    if (recorder && recorder.state !== 'inactive') recorder.stop()
+  }, [])
+
+  const startRecording = useCallback(async () => {
+    if (phase !== 'annotating' || recorderRef.current) return
+    let stream: MediaStream
+    try {
+      // displaySurface is a hint: the share picker opens with that tab preselected,
+      // the user can still switch to another source
+      stream = await navigator.mediaDevices.getDisplayMedia({
+        video: { displaySurface: recSettings.source },
+        audio: false,
+      })
+    } catch {
+      return // user dismissed the share picker
+    }
+    if (recSettings.mic) {
+      try {
+        const mic = await navigator.mediaDevices.getUserMedia({ audio: true })
+        mic.getAudioTracks().forEach((t) => stream.addTrack(t))
+      } catch {
+        /* mic denied — record without sound */
+      }
+    }
+    const mime = MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')
+      ? 'video/webm;codecs=vp9,opus'
+      : 'video/webm'
+    let recorder: MediaRecorder
+    try {
+      recorder = new MediaRecorder(stream, { mimeType: mime })
+    } catch {
+      stream.getTracks().forEach((t) => t.stop())
+      setError(T.errorRecord)
+      return
+    }
+
+    recorderRef.current = recorder
+    recordStreamRef.current = stream
+    recordChunksRef.current = []
+    recordLimitHitRef.current = false
+    recordStartedAtRef.current = Date.now()
+    setRecordElapsed(0)
+
+    recorder.ondataavailable = (e) => {
+      if (e.data.size > 0) recordChunksRef.current.push(e.data)
+    }
+    recorder.onstop = () => {
+      if (recordTimerRef.current) clearInterval(recordTimerRef.current)
+      recordTimerRef.current = null
+      stream.getTracks().forEach((t) => t.stop())
+      recorderRef.current = null
+      recordStreamRef.current = null
+      const blob = new Blob(recordChunksRef.current, { type: mime })
+      recordChunksRef.current = []
+      if (blob.size > 0) {
+        setVideoBlob(blob)
+        setVideoDurationSec(
+          Math.min(Math.round((Date.now() - recordStartedAtRef.current) / 1000), VIDEO_MAX_SEC),
+        )
+      }
+      if (recordLimitHitRef.current) setNotice(T.videoLimitReached)
+      setPhase('annotating')
+    }
+    // The user can also stop sharing via the browser's own UI
+    stream.getVideoTracks()[0]?.addEventListener('ended', stopRecording)
+
+    recordTimerRef.current = setInterval(() => {
+      const elapsed = (Date.now() - recordStartedAtRef.current) / 1000
+      setRecordElapsed(elapsed)
+      if (elapsed >= VIDEO_MAX_SEC) {
+        recordLimitHitRef.current = true
+        stopRecording()
+      }
+    }, 250)
+
+    recorder.start()
+    setError(null)
+    setNotice(null)
+    setPhase('recording')
+  }, [phase, stopRecording, T.errorRecord, T.videoLimitReached, recSettings])
+
+  // Release the capture stream if the widget unmounts mid-recording
+  useEffect(() => stopRecording, [stopRecording])
 
   // Warm up the capture chunk and font/image caches off the critical click path
   useEffect(() => {
@@ -311,7 +577,8 @@ export default function Widget({ config }: { config: ResolvedConfig }) {
   useEffect(() => {
     if (!config.hotkey) return
     const onKeyDown = (e: KeyboardEvent) => {
-      if ((!e.metaKey && !e.ctrlKey) || e.key !== 'b') return
+      // e.code, not e.key: the hotkey has to work on non-latin keyboard layouts
+      if ((!e.metaKey && !e.ctrlKey) || e.code !== 'KeyB') return
       if (isEditableTarget(e)) return
       e.preventDefault()
       triggerCapture()
@@ -333,6 +600,24 @@ export default function Widget({ config }: { config: ResolvedConfig }) {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [phase])
 
+  // Scale the canvas to the stage width (up or down, aspect kept): the capture
+  // is viewport-wide, so width-fit leaves no side bars — the toolbar-height
+  // overflow just scrolls. Explicit CSS pixel sizes keep getBoundingClientRect
+  // matching the drawing buffer, which the mouse→canvas math in getXY relies on.
+  const fitCanvas = useCallback(() => {
+    const stage = stageRef.current
+    const canvas = canvasRef.current
+    if (!stage || !canvas || !canvas.width || !canvas.height) return
+    const scale = stage.clientWidth / canvas.width
+    setCanvasCss({ w: canvas.width * scale, h: canvas.height * scale })
+  }, [])
+
+  useEffect(() => {
+    if (phase !== 'annotating') return
+    window.addEventListener('resize', fitCanvas)
+    return () => window.removeEventListener('resize', fitCanvas)
+  }, [phase, fitCanvas])
+
   useEffect(() => {
     if (phase !== 'annotating' || !screenshotDataUrl || !canvasRef.current) return
     const canvas = canvasRef.current
@@ -342,14 +627,15 @@ export default function Widget({ config }: { config: ResolvedConfig }) {
     img.onload = () => {
       canvas.width = img.naturalWidth
       canvas.height = img.naturalHeight
+      fitCanvas()
       ctx.drawImage(img, 0, 0)
       annotations.forEach((ann, i) => drawAnnotation(ctx, ann, reportType, i === selectedIndex))
       if (liveDraw) drawAnnotation(ctx, liveDraw, reportType)
     }
     img.src = screenshotDataUrl
-  }, [phase, screenshotDataUrl, annotations, liveDraw, selectedIndex, reportType])
+  }, [phase, screenshotDataUrl, annotations, liveDraw, selectedIndex, reportType, fitCanvas])
 
-  const getXY = (e: JSX.TargetedMouseEvent<HTMLCanvasElement>): Point => {
+  const getXY = (e: JSX.TargetedPointerEvent<HTMLCanvasElement>): Point => {
     const canvas = canvasRef.current!
     const rect = canvas.getBoundingClientRect()
     return {
@@ -361,7 +647,28 @@ export default function Widget({ config }: { config: ResolvedConfig }) {
   const getTextFontSize = (): number => {
     const canvas = canvasRef.current!
     const rect = canvas.getBoundingClientRect()
-    return Math.round((18 * canvas.width) / rect.width)
+    return Math.round((textSize * canvas.width) / rect.width)
+  }
+
+  const selectDestination = (d: 'endpoint' | 'download') => {
+    setDestination(d)
+    setDestMenuOpen(false)
+    try {
+      localStorage.setItem(DEST_STORAGE_KEY, d)
+    } catch {
+      /* ignore */
+    }
+  }
+
+  const adjustTextSize = (delta: number) => {
+    const next = Math.max(TEXT_SIZE_MIN, Math.min(TEXT_SIZE_MAX, textSize + delta))
+    setTextSize(next)
+    const canvas = canvasRef.current
+    if (canvas && pendingTextRef.current) {
+      const rect = canvas.getBoundingClientRect()
+      const fontSize = Math.round((next * canvas.width) / rect.width)
+      setPendingText((p) => (p ? { ...p, fontSize } : p))
+    }
   }
 
   const confirmText = useCallback(() => {
@@ -382,7 +689,7 @@ export default function Widget({ config }: { config: ResolvedConfig }) {
     setPendingText(null)
   }, [])
 
-  const onCanvasDown = (e: JSX.TargetedMouseEvent<HTMLCanvasElement>) => {
+  const onCanvasDown = (e: JSX.TargetedPointerEvent<HTMLCanvasElement>) => {
     if (tool === 'cursor') {
       const p = getXY(e)
       let found = -1
@@ -399,6 +706,8 @@ export default function Widget({ config }: { config: ResolvedConfig }) {
         cursorDragIdx.current = found
         isDrawing.current = true
         setCursorDragging(true)
+        // Keep receiving moves when the pointer leaves the canvas mid-drag
+        e.currentTarget.setPointerCapture(e.pointerId)
       }
       return
     }
@@ -430,9 +739,10 @@ export default function Widget({ config }: { config: ResolvedConfig }) {
     isDrawing.current = true
     drawStart.current = getXY(e)
     if (tool === 'pencil') pencilPoints.current = [getXY(e)]
+    e.currentTarget.setPointerCapture(e.pointerId)
   }
 
-  const onCanvasMove = (e: JSX.TargetedMouseEvent<HTMLCanvasElement>) => {
+  const onCanvasMove = (e: JSX.TargetedPointerEvent<HTMLCanvasElement>) => {
     if (
       tool === 'cursor' &&
       isDrawing.current &&
@@ -459,7 +769,7 @@ export default function Widget({ config }: { config: ResolvedConfig }) {
     }
   }
 
-  const onCanvasUp = (e: JSX.TargetedMouseEvent<HTMLCanvasElement>) => {
+  const onCanvasUp = (e: JSX.TargetedPointerEvent<HTMLCanvasElement>) => {
     if (tool === 'cursor') {
       isDrawing.current = false
       setCursorDragging(false)
@@ -504,13 +814,16 @@ export default function Widget({ config }: { config: ResolvedConfig }) {
         else { net.shift(); netJson = JSON.stringify(net) }
       }
       try {
-        await submitReport(config, {
+        const data = {
           screenshot: blob,
+          video: videoBlob,
           description,
           type: reportType,
           consoleLogs: logsJson,
           networkRequests: netJson,
-        })
+        }
+        if (destination === 'download') await downloadReport(data)
+        else await submitReport(config, data)
         setSent(true)
         setTimeout(() => {
           setPhase('idle')
@@ -543,13 +856,13 @@ export default function Widget({ config }: { config: ResolvedConfig }) {
 
   return (
     <div className="font-sans">
-      {pos && (
+      {pos && phase !== 'recording' && (
         <button
           ref={buttonRef}
-          onMouseDown={handleMouseDown}
+          onPointerDown={handleButtonPointerDown}
           onClick={handleClick}
           style={{ left: pos.x, top: pos.y }}
-          className="fixed z-50 w-11 h-11 rounded-full bg-red-600 hover:bg-red-500 active:bg-red-700 active:scale-95 text-white shadow-lg flex items-center justify-center cursor-grab active:cursor-grabbing transition-colors transition-transform select-none"
+          className="fixed z-50 w-11 h-11 rounded-full bg-red-600 hover:bg-red-500 active:bg-red-700 active:scale-95 text-white shadow-lg flex items-center justify-center cursor-grab active:cursor-grabbing transition-colors transition-transform select-none touch-none"
           title={T.buttonTitle}
         >
           {phase === 'capturing' ? (
@@ -600,6 +913,29 @@ export default function Widget({ config }: { config: ResolvedConfig }) {
                 {icon} {label}
               </button>
             ))}
+            {tool === 'text' && (
+              <div className="flex items-center rounded overflow-hidden border border-gray-600">
+                <button
+                  onClick={() => adjustTextSize(-1)}
+                  aria-label={T.textSizeDecrease}
+                  disabled={textSize <= TEXT_SIZE_MIN}
+                  className="px-1.5 py-1 bg-gray-700 text-gray-300 hover:bg-gray-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors active:scale-95 disabled:active:scale-100"
+                >
+                  <Minus className="w-3 h-3" />
+                </button>
+                <span className="px-1.5 text-xs tabular-nums text-gray-300 select-none">
+                  {textSize}
+                </span>
+                <button
+                  onClick={() => adjustTextSize(1)}
+                  aria-label={T.textSizeIncrease}
+                  disabled={textSize >= TEXT_SIZE_MAX}
+                  className="px-1.5 py-1 bg-gray-700 text-gray-300 hover:bg-gray-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors active:scale-95 disabled:active:scale-100"
+                >
+                  <Plus className="w-3 h-3" />
+                </button>
+              </div>
+            )}
             <button
               onClick={() => setAnnotations((prev) => prev.slice(0, -1))}
               disabled={annotations.length === 0}
@@ -616,6 +952,73 @@ export default function Widget({ config }: { config: ResolvedConfig }) {
             >
               <Trash2 className="w-3 h-3" /> {T.clear}
             </button>
+            {config.video && (
+              <div className="relative flex items-stretch">
+                <button
+                  onClick={startRecording}
+                  title={T.recordVideo}
+                  className="flex items-center gap-1.5 px-2 py-1 rounded-l text-xs font-medium border border-red-500/50 bg-red-500/15 text-red-300 hover:bg-red-500/30 hover:text-red-200 transition-colors active:scale-95"
+                >
+                  <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                  {T.record}
+                  <span className="text-red-400/70 font-normal">{formatSeconds(VIDEO_MAX_SEC)}</span>
+                </button>
+                <button
+                  title={T.recordSettingsTitle}
+                  onClick={() => setRecMenuOpen((o) => !o)}
+                  className="flex items-center px-1 rounded-r border border-l-0 border-red-500/50 bg-red-500/15 text-red-300 hover:bg-red-500/30 transition-colors active:scale-95"
+                >
+                  <ChevronDown className="w-3 h-3" />
+                </button>
+                {recMenuOpen && (
+                  <div
+                    onClick={(e) => e.stopPropagation()}
+                    className="absolute left-0 top-full mt-1 z-20 min-w-[170px] rounded-lg border border-gray-700 bg-gray-900 shadow-xl overflow-hidden"
+                  >
+                    {(
+                      [
+                        ['monitor', T.sourceScreen, <Monitor className="w-3 h-3" />],
+                        ['window', T.sourceWindow, <AppWindow className="w-3 h-3" />],
+                        ['browser', T.sourceTab, <PanelTop className="w-3 h-3" />],
+                      ] as const
+                    ).map(([source, label, icon]) => (
+                      <button
+                        key={source}
+                        onClick={() => updateRecSettings({ source })}
+                        className="flex items-center gap-2 w-full px-3 py-2 text-xs text-gray-200 hover:bg-gray-700 transition-colors"
+                      >
+                        {icon} {label}
+                        {recSettings.source === source && <Check className="w-3 h-3 ml-auto" />}
+                      </button>
+                    ))}
+                    <div className="border-t border-gray-700" />
+                    <button
+                      onClick={() => updateRecSettings({ mic: !recSettings.mic })}
+                      className="flex items-center gap-2 w-full px-3 py-2 text-xs text-gray-200 hover:bg-gray-700 transition-colors"
+                    >
+                      <Mic className="w-3 h-3" /> {T.microphone}
+                      {recSettings.mic && <Check className="w-3 h-3 ml-auto" />}
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+            {videoBlob && (
+              <span className="flex items-center gap-1 px-2 py-1 rounded text-xs bg-gray-800 border border-gray-600 text-gray-300">
+                <Video className="w-3 h-3 text-red-400" />
+                <span className="tabular-nums">{formatSeconds(videoDurationSec)}</span>
+                <button
+                  onClick={() => {
+                    setVideoBlob(null)
+                    setVideoDurationSec(0)
+                  }}
+                  title={T.removeVideo}
+                  className="p-0.5 rounded hover:bg-gray-600 transition-colors active:scale-95"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            )}
             <div className="flex-1" />
             <input
               value={description}
@@ -624,37 +1027,77 @@ export default function Widget({ config }: { config: ResolvedConfig }) {
               placeholder={reportType === 'bug' ? T.placeholderBug : T.placeholderImprovement}
               className={`bg-gray-800 text-white text-xs h-7 px-3 rounded w-64 cursor-pointer placeholder:text-gray-500 border transition-colors outline-none ${reportType === 'bug' ? 'border-red-500/60 hover:border-red-400 focus:border-red-400' : 'border-yellow-500/60 hover:border-yellow-400 focus:border-yellow-400'}`}
             />
-            <button
-              onClick={handleSubmit}
-              disabled={submitting || sent}
-              className={`flex items-center gap-1 px-3 py-1.5 rounded text-xs font-medium disabled:opacity-60 transition-colors active:scale-95 disabled:active:scale-100 ${reportType === 'bug' ? 'bg-red-600 hover:bg-red-500' : 'bg-yellow-600 hover:bg-yellow-500'}`}
-            >
-              {sent ? (
-                T.sent
-              ) : submitting ? (
-                <Loader className="w-3 h-3 animate-spin" />
-              ) : (
-                <>
-                  <Send className="w-3 h-3" /> {T.send}
-                </>
+            <div className="relative flex items-stretch">
+              <button
+                onClick={handleSubmit}
+                disabled={submitting || sent}
+                className={`flex items-center gap-1 px-3 py-1.5 text-xs font-medium disabled:opacity-60 transition-colors active:scale-95 disabled:active:scale-100 ${config.endpoint ? 'rounded-l' : 'rounded'} ${reportType === 'bug' ? 'bg-red-600 hover:bg-red-500' : 'bg-yellow-600 hover:bg-yellow-500'}`}
+              >
+                {sent ? (
+                  T.sent
+                ) : submitting ? (
+                  <Loader className="w-3 h-3 animate-spin" />
+                ) : destination === 'download' ? (
+                  <>
+                    <Download className="w-3 h-3" /> {T.download}
+                  </>
+                ) : (
+                  <>
+                    <Send className="w-3 h-3" /> {T.send}
+                  </>
+                )}
+              </button>
+              {config.endpoint && (
+                <button
+                  title={T.destinationTitle}
+                  onClick={() => setDestMenuOpen((o) => !o)}
+                  className={`flex items-center px-1 rounded-r border-l transition-colors active:scale-95 ${reportType === 'bug' ? 'bg-red-600 hover:bg-red-500 border-red-800' : 'bg-yellow-600 hover:bg-yellow-500 border-yellow-800'}`}
+                >
+                  <ChevronDown className="w-3 h-3" />
+                </button>
               )}
-            </button>
+              {destMenuOpen && (
+                <div className="absolute right-0 top-full mt-1 z-20 min-w-[150px] rounded-lg border border-gray-700 bg-gray-900 shadow-xl overflow-hidden">
+                  <button
+                    onClick={() => selectDestination('endpoint')}
+                    className="flex items-center gap-2 w-full px-3 py-2 text-xs text-gray-200 hover:bg-gray-700 transition-colors"
+                  >
+                    <Send className="w-3 h-3" /> {T.send}
+                    {destination === 'endpoint' && <Check className="w-3 h-3 ml-auto" />}
+                  </button>
+                  <button
+                    onClick={() => selectDestination('download')}
+                    className="flex items-center gap-2 w-full px-3 py-2 text-xs text-gray-200 hover:bg-gray-700 transition-colors"
+                  >
+                    <Download className="w-3 h-3" /> {T.download}
+                    {destination === 'download' && <Check className="w-3 h-3 ml-auto" />}
+                  </button>
+                </div>
+              )}
+            </div>
             {error && <span className="text-xs text-red-400">{error}</span>}
+            {notice && <span className="text-xs text-yellow-400">{notice}</span>}
             <button
               onClick={() => setPhase('idle')}
+              aria-label={T.close}
+              title={T.close}
               className="ml-1 p-1 rounded hover:bg-gray-700 transition-colors active:scale-95"
             >
               <X className="w-4 h-4" />
             </button>
           </div>
 
-          <div className="flex-1 overflow-auto">
+          <div
+            ref={stageRef}
+            className="flex-1 min-h-0 flex overflow-y-auto overflow-x-hidden bg-gray-900"
+          >
             <canvas
               ref={canvasRef}
-              onMouseDown={onCanvasDown}
-              onMouseMove={onCanvasMove}
-              onMouseUp={onCanvasUp}
-              className={`block max-w-full ${canvasCursor}`}
+              onPointerDown={onCanvasDown}
+              onPointerMove={onCanvasMove}
+              onPointerUp={onCanvasUp}
+              style={canvasCss ? { width: canvasCss.w, height: canvasCss.h } : undefined}
+              className={`block m-auto ring-1 ring-white/10 touch-none ${canvasCursor}`}
             />
           </div>
 
@@ -670,6 +1113,7 @@ export default function Widget({ config }: { config: ResolvedConfig }) {
                   {reportType === 'bug' ? <Bug className="w-4 h-4" /> : <Lightbulb className="w-4 h-4" />}
                   {reportType === 'bug' ? T.typeBug : T.typeImprovement}
                   <button
+                    aria-label={T.close}
                     className="ml-auto p-1 rounded hover:bg-gray-700 text-gray-400 hover:text-white transition-colors active:scale-95"
                     onClick={() => { setDescription(''); setDescriptionOpen(false) }}
                   >
@@ -705,7 +1149,6 @@ export default function Widget({ config }: { config: ResolvedConfig }) {
           {pendingText && (
             <textarea
               ref={textInputRef}
-              style={{ left: pendingText.screenPos.x, top: pendingText.screenPos.y }}
               value={pendingText.value}
               onInput={(e) => {
                 const value = e.currentTarget.value
@@ -733,11 +1176,34 @@ export default function Widget({ config }: { config: ResolvedConfig }) {
                 }
               }}
               rows={1}
-              className={`fixed z-[10000] bg-transparent border-b-2 font-bold text-lg outline-none min-w-[80px] resize-none overflow-hidden leading-tight ${reportType === 'bug' ? 'border-red-500 text-red-500' : 'border-yellow-500 text-yellow-500'}`}
+              style={{
+                left: pendingText.screenPos.x,
+                top: pendingText.screenPos.y,
+                fontSize: textSize,
+              }}
+              className={`fixed z-[10000] bg-transparent border-b-2 font-bold outline-none min-w-[80px] max-w-[50vw] resize-none overflow-hidden leading-tight ${reportType === 'bug' ? 'border-red-500 text-red-500' : 'border-yellow-500 text-yellow-500'}`}
               placeholder="..."
             />
           )}
         </div>
+      )}
+
+      {phase === 'recording' && (
+        <>
+          <div className="fixed inset-0 z-[9998] pointer-events-none border-4 border-red-500" />
+          <div className="fixed top-3 left-1/2 -translate-x-1/2 z-[9999] flex items-center gap-2 pl-3 pr-1.5 py-1.5 rounded-full bg-gray-900/95 text-white shadow-lg">
+            <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse" />
+            <span className="text-xs tabular-nums">
+              {formatSeconds(recordElapsed)} / {formatSeconds(VIDEO_MAX_SEC)}
+            </span>
+            <button
+              onClick={stopRecording}
+              className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-red-600 hover:bg-red-500 transition-colors active:scale-95"
+            >
+              <Square className="w-3 h-3 fill-current" /> {T.stopRecording}
+            </button>
+          </div>
+        </>
       )}
     </div>
   )

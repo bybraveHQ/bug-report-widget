@@ -16,23 +16,88 @@
       <h1>Demo host page</h1>
       <div class="card">
         <p>This is the host page. The red button on the left is the widget in Shadow DOM.</p>
-        <p>Click the button or press <kbd>Cmd/Ctrl+B</kbd> — screenshot, annotations, submission to the mock <code>/api/reports</code>.</p>
+        <p>Click the button or press <kbd>Cmd/Ctrl+B</kbd> — screenshot, annotations, video recording, submission.</p>
+        <p>Sent reports land in <code>reports/new/</code> in the project root (screenshot, video, report.json). The Download option in the widget saves the same report as a .zip instead.</p>
       </div>
       <div class="card">
-        <p>Buttons to test console/network capture:</p>
+        <p>Generate traffic, then send a report and check <code>console_logs</code> / <code>network_requests</code> in it:</p>
         <button id="err-btn">console.error</button>
-        <button id="net-btn">fetch 404</button>
+        <button id="net-btn">fetch 404 (JSON error)</button>
+        <button id="json-btn">fetch JSON (200)</button>
+        <button id="post-btn">POST JSON</button>
+        <button id="xhr-btn">XHR 404</button>
+        <button id="img-btn">broken &lt;img&gt;</button>
+        <button id="throw-btn">uncaught error</button>
+        <button id="reject-btn">unhandled rejection</button>
+        <pre id="demo-log" style="margin: 1rem 0 0; padding: 0.75rem; background: #0f172a; color: #4ade80; border-radius: 6px; font-size: 12px; min-height: 3.5rem; max-height: 10rem; overflow-y: auto; white-space: pre-wrap;">— button clicks will show up here —</pre>
       </div>
     </main>
     <script type="module">
       import { init } from '/src/index.ts'
-      init({ endpoint: '/api/reports' })
+      init({ endpoint: '/api/reports', video: true, network: 'all' })
+
+      const logEl = document.getElementById('demo-log')
+      const logLine = (text) => {
+        if (logEl.dataset.used !== '1') {
+          logEl.dataset.used = '1'
+          logEl.textContent = ''
+        }
+        logEl.textContent += `[${new Date().toLocaleTimeString()}] ${text}\n`
+        logEl.scrollTop = logEl.scrollHeight
+      }
 
       document.getElementById('err-btn').addEventListener('click', () => {
         console.error('demo error', { code: 42 })
+        logLine('console.error("demo error", { code: 42 }) — check console_logs in the report')
       })
       document.getElementById('net-btn').addEventListener('click', () => {
-        fetch('/api/does-not-exist').catch(() => {})
+        fetch('/api/does-not-exist')
+          .then((r) => logLine(`GET /api/does-not-exist → ${r.status}`))
+          .catch(() => logLine('GET /api/does-not-exist → network error'))
+      })
+      document.getElementById('json-btn').addEventListener('click', () => {
+        fetch('/api/demo-data')
+          .then((r) => logLine(`GET /api/demo-data → ${r.status}`))
+          .catch(() => logLine('GET /api/demo-data → network error'))
+      })
+      document.getElementById('post-btn').addEventListener('click', () => {
+        fetch('/api/demo-data', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Request-Id': 'demo-123' },
+          body: JSON.stringify({ action: 'add_to_cart', sku: 'A-100', qty: 2 }),
+        })
+          .then((r) => logLine(`POST /api/demo-data {action: add_to_cart} → ${r.status}`))
+          .catch(() => logLine('POST /api/demo-data → network error'))
+      })
+      document.getElementById('xhr-btn').addEventListener('click', () => {
+        const xhr = new XMLHttpRequest()
+        xhr.open('GET', '/api/does-not-exist')
+        xhr.setRequestHeader('X-Request-Id', 'demo-xhr')
+        xhr.addEventListener('loadend', () =>
+          logLine(`XHR GET /api/does-not-exist → ${xhr.status} — check network_requests in the report`),
+        )
+        xhr.send()
+      })
+      document.getElementById('img-btn').addEventListener('click', () => {
+        // load errors reach window listeners only when the element is in the DOM
+        const img = document.createElement('img')
+        img.style.display = 'none'
+        img.src = '/api/does-not-exist/broken.png'
+        img.addEventListener('error', () => {
+          img.remove()
+          logLine('<img src="/api/does-not-exist/broken.png"> failed to load — check console_logs in the report')
+        })
+        document.body.appendChild(img)
+      })
+      document.getElementById('throw-btn').addEventListener('click', () => {
+        logLine('throw new Error("demo uncaught") — check console_logs in the report')
+        setTimeout(() => {
+          throw new Error('demo uncaught')
+        })
+      })
+      document.getElementById('reject-btn').addEventListener('click', () => {
+        logLine('Promise.reject(new Error("demo rejection")) — check console_logs in the report')
+        Promise.reject(new Error('demo rejection'))
       })
     </script>
   </body>
