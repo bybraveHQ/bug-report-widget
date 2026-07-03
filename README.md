@@ -190,3 +190,7 @@ export async function POST(req: NextRequest) {
 - Captures console warn/error, uncaught exceptions, unhandled rejections and failed resource loads (up to 100)
 - Captures `fetch` and `XMLHttpRequest` (up to 50; failed only by default, all with `network: 'all'`), 512 KB total cap; streaming responses are not buffered, sensitive headers are redacted
 - Environment metadata in every report: user agent, language, viewport, screen, DPR, timezone
+
+## License
+
+[MIT](LICENSE) © [Vladyslav Kaplin (bybrave)](https://github.com/bybraveHQ)

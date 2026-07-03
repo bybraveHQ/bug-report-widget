@@ -4,7 +4,7 @@
   "description": "Embeddable bug report widget: screenshot, annotations, console/network capture. Framework-agnostic, one script tag.",
   "type": "module",
   "license": "MIT",
-  "author": "bybrave",
+  "author": "Vladyslav Kaplin (https://github.com/bybraveHQ)",
   "funding": "https://ko-fi.com/bybrave",
   "keywords": [
     "bug-report",
