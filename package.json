@@ -4,7 +4,20 @@
   "description": "Embeddable bug report widget: screenshot, annotations, console/network capture. Framework-agnostic, one script tag.",
   "type": "module",
   "license": "MIT",
+  "author": "bybrave",
   "funding": "https://ko-fi.com/bybrave",
+  "keywords": [
+    "bug-report",
+    "feedback",
+    "widget",
+    "screenshot",
+    "annotation",
+    "screen-recording",
+    "console-capture",
+    "network-capture"
+  ],
+  "homepage": "https://github.com/bybraveHQ/bug-report-widget#readme",
+  "bugs": "https://github.com/bybraveHQ/bug-report-widget/issues",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/bybraveHQ/bug-report-widget.git"
@@ -17,6 +30,8 @@
   ],
   "main": "./dist/bug-report-widget.js",
   "module": "./dist/bug-report-widget.js",
+  "unpkg": "./dist/bug-report-widget.iife.js",
+  "jsdelivr": "./dist/bug-report-widget.iife.js",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
@@ -29,6 +44,8 @@
     "build": "vite build && tsc -p tsconfig.build.json",
     "prepublishOnly": "npm run build",
     "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "lint": "eslint .",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -37,9 +54,15 @@
     "preact": "^10.26.9"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@tailwindcss/postcss": "^4.1.11",
+    "eslint": "^10.6.0",
+    "eslint-config-prettier": "^10.1.8",
+    "prettier": "^3.9.4",
     "tailwindcss": "^4.1.11",
     "typescript": "^5.8.3",
-    "vite": "^7.0.0"
+    "typescript-eslint": "^8.62.1",
+    "vite": "^7.0.0",
+    "vitest": "^4.1.9"
   }
 }
