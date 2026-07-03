@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.0
 
 - Screen recording (opt-in `video: true`, max 60s, source/microphone settings, red frame + timer)
 - Report destination picker: POST to endpoint or download as .zip (no backend required)
