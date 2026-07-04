@@ -1,6 +1,6 @@
 {
   "name": "@bybrave/bug-report-widget",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "Embeddable bug report widget: screenshot, annotations, console/network capture. Framework-agnostic, one script tag.",
   "type": "module",
   "license": "MIT",
