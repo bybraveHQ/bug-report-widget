@@ -189,6 +189,10 @@ export async function POST(req: NextRequest) {
 - Captures `fetch` and `XMLHttpRequest` (up to 50; failed only by default, all with `network: 'all'`), 512 KB total cap; streaming responses are not buffered, sensitive headers are redacted
 - Environment metadata in every report: user agent, language, viewport, screen, DPR, timezone
 
+## Feedback
+
+Found a bug or have a feature request? [Open an issue](https://github.com/bybraveHQ/bug-report-widget/issues).
+
 ## Support
 
 If this widget saves you time, you can support development:
