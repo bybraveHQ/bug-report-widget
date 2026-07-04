@@ -81,6 +81,16 @@ export function BugReportLoader() {
 }
 ```
 
+### Updating
+
+The package is on a `0.x` version, so `npm update` won't pick up new minor releases (`^0.4.1` doesn't allow `0.5.0` — that's how semver treats zero-major versions). To update to the latest version:
+
+```bash
+npm install @bybrave/bug-report-widget@latest
+```
+
+The unversioned CDN URL (`https://unpkg.com/@bybrave/bug-report-widget`) always resolves to the latest release — nothing to update. To avoid surprise updates, pin a version instead: `https://unpkg.com/@bybrave/bug-report-widget@0.4.1` and bump it manually.
+
 ### Config
 
 ```ts
