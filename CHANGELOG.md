@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.0
+
+- **Breaking:** screen recording removed — the `video` option, `data-video` attribute and the `video.webm` report field are gone; recording could not survive host page reloads without a companion window, so the feature was dropped
+
 ## 0.3.0
 
 - Screen recording is enabled by default; `video: false` (`data-video="false"`) hides the record button

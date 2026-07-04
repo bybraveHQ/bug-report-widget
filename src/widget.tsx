@@ -13,23 +13,18 @@ import {
   Undo2,
   MousePointer2,
   Trash2,
-  Video,
   Download,
   Minus,
   Plus,
   ChevronDown,
   Check,
-  Monitor,
-  AppWindow,
-  PanelTop,
-  Mic,
 } from 'lucide-preact'
 import { createZip, type ZipEntry } from './zip'
 import { type Annotation, type RectAnn, type ArrowAnn, hitTest, moveAnnotation } from './geometry'
 import { initInterceptors, getConsoleLogs, getNetworkRequests } from './capture-interceptors'
 import type { ButtonPosition, ResolvedConfig } from './types'
 
-type Phase = 'idle' | 'capturing' | 'annotating' | 'recording'
+type Phase = 'idle' | 'capturing' | 'annotating'
 type Tool = 'cursor' | 'rect' | 'arrow' | 'pencil' | 'text'
 type ReportType = 'bug' | 'improvement'
 
@@ -43,32 +38,15 @@ type LiveDraw = RectAnn | ArrowAnn | PencilAnn
 
 const STORAGE_KEY = 'bug-report-widget-pos'
 const DEST_STORAGE_KEY = 'bug-report-widget-dest'
-const REC_STORAGE_KEY = 'bug-report-widget-rec'
 const STROKE_STORAGE_KEY = 'bug-report-widget-stroke'
 
 // Floating button footprint used to clamp its position to the viewport
 const BUTTON_SIZE_PX = 48
 
-type RecordSource = 'monitor' | 'window' | 'browser'
-
-function loadRecordSettings(): { source: RecordSource; mic: boolean } {
-  try {
-    const saved = JSON.parse(localStorage.getItem(REC_STORAGE_KEY) ?? '{}')
-    return {
-      source: ['monitor', 'window', 'browser'].includes(saved.source) ? saved.source : 'monitor',
-      mic: saved.mic === true,
-    }
-  } catch {
-    return { source: 'monitor', mic: false }
-  }
-}
-
 // Keep the success state visible just long enough to register, then get out
 // of the user's way.
 const SENT_LINGER_MS = 800
 
-const VIDEO_MAX_SEC = 60
-const NOTICE_LINGER_MS = 5000
 const TEXT_SIZE_DEFAULT = 18
 const TEXT_SIZE_MIN = 8
 const TEXT_SIZE_MAX = 72
@@ -98,11 +76,6 @@ function measureTextWidth(text: string, fontSize: number): number {
   if (!measureCtx) return 0
   measureCtx.font = `bold ${fontSize}px sans-serif`
   return Math.max(0, ...text.split('\n').map((line) => measureCtx!.measureText(line).width))
-}
-
-function formatSeconds(total: number): string {
-  const s = Math.max(0, Math.floor(total))
-  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
 }
 
 const BUTTON_MARGIN_PX = 24
@@ -233,7 +206,6 @@ function drawAnnotation(
 
 interface ReportData {
   screenshot: Blob
-  video: Blob | null
   description: string
   type: ReportType
   consoleLogs: string
@@ -255,7 +227,6 @@ function collectMeta() {
 async function submitReport(config: ResolvedConfig, data: ReportData): Promise<void> {
   const form = new FormData()
   form.append('screenshot', data.screenshot, 'screenshot.jpg')
-  if (data.video) form.append('video', data.video, 'video.webm')
   form.append('url', window.location.href)
   form.append('page_title', document.title)
   form.append('description', data.description)
@@ -287,9 +258,6 @@ async function downloadReport(data: ReportData): Promise<void> {
     { name: 'screenshot.jpg', data: new Uint8Array(await data.screenshot.arrayBuffer()) },
     { name: 'report.json', data: new TextEncoder().encode(JSON.stringify(report, null, 2)) },
   ]
-  if (data.video) {
-    entries.push({ name: 'video.webm', data: new Uint8Array(await data.video.arrayBuffer()) })
-  }
   const stamp = new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-')
   const url = URL.createObjectURL(createZip(entries))
   const a = document.createElement('a')
@@ -320,7 +288,6 @@ export default function Widget({ config }: { config: ResolvedConfig }) {
   const [submitting, setSubmitting] = useState(false)
   const [sent, setSent] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [notice, setNotice] = useState<string | null>(null)
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null)
   const [cursorDragging, setCursorDragging] = useState(false)
   const [strokeWidth, setStrokeWidth] = useState(loadStrokeWidth)
@@ -343,11 +310,6 @@ export default function Widget({ config }: { config: ResolvedConfig }) {
     return config.destination
   })
   const [destMenuOpen, setDestMenuOpen] = useState(false)
-  const [recSettings, setRecSettings] = useState(loadRecordSettings)
-  const [recMenuOpen, setRecMenuOpen] = useState(false)
-  const [videoBlob, setVideoBlob] = useState<Blob | null>(null)
-  const [videoDurationSec, setVideoDurationSec] = useState(0)
-  const [recordElapsed, setRecordElapsed] = useState(0)
 
   const buttonRef = useRef<HTMLButtonElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -365,12 +327,6 @@ export default function Widget({ config }: { config: ResolvedConfig }) {
   const cursorDragOrigin = useRef<Point | null>(null)
   const cursorDragAnnSnap = useRef<Annotation | null>(null)
   const cursorDragIdx = useRef<number | null>(null)
-  const recorderRef = useRef<MediaRecorder | null>(null)
-  const recordStreamRef = useRef<MediaStream | null>(null)
-  const recordChunksRef = useRef<Blob[]>([])
-  const recordTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const recordStartedAtRef = useRef(0)
-  const recordLimitHitRef = useRef(false)
   useEffect(() => {
     pendingTextRef.current = pendingText
   }, [pendingText])
@@ -477,10 +433,7 @@ export default function Widget({ config }: { config: ResolvedConfig }) {
       setReportType('bug')
       setSent(false)
       setError(null)
-      setNotice(null)
       setSelectedIndex(null)
-      setVideoBlob(null)
-      setVideoDurationSec(0)
       setPhase('annotating')
     } catch (err) {
       setError(T.errorCapture)
@@ -503,118 +456,11 @@ export default function Widget({ config }: { config: ResolvedConfig }) {
   useEffect(() => { initInterceptors(config.network) }, [config.network])
 
   useEffect(() => {
-    if (!notice) return
-    const t = setTimeout(() => setNotice(null), NOTICE_LINGER_MS)
-    return () => clearTimeout(t)
-  }, [notice])
-
-  useEffect(() => {
-    if (!destMenuOpen && !recMenuOpen) return
-    const close = () => {
-      setDestMenuOpen(false)
-      setRecMenuOpen(false)
-    }
+    if (!destMenuOpen) return
+    const close = () => setDestMenuOpen(false)
     window.addEventListener('click', close)
     return () => window.removeEventListener('click', close)
-  }, [destMenuOpen, recMenuOpen])
-
-  const updateRecSettings = (patch: Partial<typeof recSettings>) => {
-    setRecSettings((prev) => {
-      const next = { ...prev, ...patch }
-      try {
-        localStorage.setItem(REC_STORAGE_KEY, JSON.stringify(next))
-      } catch {
-        /* ignore */
-      }
-      return next
-    })
-  }
-
-  const stopRecording = useCallback(() => {
-    const recorder = recorderRef.current
-    if (recorder && recorder.state !== 'inactive') recorder.stop()
-  }, [])
-
-  const startRecording = useCallback(async () => {
-    if (phase !== 'annotating' || recorderRef.current) return
-    let stream: MediaStream
-    try {
-      // displaySurface is a hint: the share picker opens with that tab preselected,
-      // the user can still switch to another source
-      stream = await navigator.mediaDevices.getDisplayMedia({
-        video: { displaySurface: recSettings.source },
-        audio: false,
-      })
-    } catch {
-      return // user dismissed the share picker
-    }
-    if (recSettings.mic) {
-      try {
-        const mic = await navigator.mediaDevices.getUserMedia({ audio: true })
-        mic.getAudioTracks().forEach((t) => stream.addTrack(t))
-      } catch {
-        /* mic denied — record without sound */
-      }
-    }
-    const mime = MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')
-      ? 'video/webm;codecs=vp9,opus'
-      : 'video/webm'
-    let recorder: MediaRecorder
-    try {
-      recorder = new MediaRecorder(stream, { mimeType: mime })
-    } catch {
-      stream.getTracks().forEach((t) => t.stop())
-      setError(T.errorRecord)
-      return
-    }
-
-    recorderRef.current = recorder
-    recordStreamRef.current = stream
-    recordChunksRef.current = []
-    recordLimitHitRef.current = false
-    recordStartedAtRef.current = Date.now()
-    setRecordElapsed(0)
-
-    recorder.ondataavailable = (e) => {
-      if (e.data.size > 0) recordChunksRef.current.push(e.data)
-    }
-    recorder.onstop = () => {
-      if (recordTimerRef.current) clearInterval(recordTimerRef.current)
-      recordTimerRef.current = null
-      stream.getTracks().forEach((t) => t.stop())
-      recorderRef.current = null
-      recordStreamRef.current = null
-      const blob = new Blob(recordChunksRef.current, { type: mime })
-      recordChunksRef.current = []
-      if (blob.size > 0) {
-        setVideoBlob(blob)
-        setVideoDurationSec(
-          Math.min(Math.round((Date.now() - recordStartedAtRef.current) / 1000), VIDEO_MAX_SEC),
-        )
-      }
-      if (recordLimitHitRef.current) setNotice(T.videoLimitReached)
-      setPhase('annotating')
-    }
-    // The user can also stop sharing via the browser's own UI
-    stream.getVideoTracks()[0]?.addEventListener('ended', stopRecording)
-
-    recordTimerRef.current = setInterval(() => {
-      const elapsed = (Date.now() - recordStartedAtRef.current) / 1000
-      setRecordElapsed(elapsed)
-      if (elapsed >= VIDEO_MAX_SEC) {
-        recordLimitHitRef.current = true
-        stopRecording()
-      }
-    }, 250)
-
-    recorder.start()
-    setError(null)
-    setNotice(null)
-    setPhase('recording')
-  }, [phase, stopRecording, T.errorRecord, T.videoLimitReached, recSettings])
-
-  // Release the capture stream if the widget unmounts mid-recording
-  useEffect(() => stopRecording, [stopRecording])
+  }, [destMenuOpen])
 
   // Warm up the capture chunk and font/image caches off the critical click path
   useEffect(() => {
@@ -932,7 +778,6 @@ export default function Widget({ config }: { config: ResolvedConfig }) {
       try {
         const data = {
           screenshot: blob,
-          video: videoBlob,
           description,
           type: reportType,
           consoleLogs: logsJson,
@@ -982,7 +827,7 @@ export default function Widget({ config }: { config: ResolvedConfig }) {
 
   return (
     <div className="font-sans">
-      {pos && phase !== 'recording' && (
+      {pos && (
         <button
           ref={buttonRef}
           onPointerDown={handleButtonPointerDown}
@@ -1112,73 +957,6 @@ export default function Widget({ config }: { config: ResolvedConfig }) {
             >
               <Trash2 className="w-3 h-3" /> {T.clear}
             </button>
-            {config.video && (
-              <div className="relative flex items-stretch">
-                <button
-                  onClick={startRecording}
-                  title={T.recordVideo}
-                  className="flex items-center gap-1.5 px-2 py-1 rounded-l text-xs font-medium border border-red-500/50 bg-red-500/15 text-red-300 hover:bg-red-500/30 hover:text-red-200 transition-colors active:scale-95"
-                >
-                  <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-                  {T.record}
-                  <span className="text-red-400/70 font-normal">{formatSeconds(VIDEO_MAX_SEC)}</span>
-                </button>
-                <button
-                  title={T.recordSettingsTitle}
-                  onClick={() => setRecMenuOpen((o) => !o)}
-                  className="flex items-center px-1 rounded-r border border-l-0 border-red-500/50 bg-red-500/15 text-red-300 hover:bg-red-500/30 transition-colors active:scale-95"
-                >
-                  <ChevronDown className="w-3 h-3" />
-                </button>
-                {recMenuOpen && (
-                  <div
-                    onClick={(e) => e.stopPropagation()}
-                    className="absolute left-0 top-full mt-1 z-20 min-w-[170px] rounded-lg border border-gray-700 bg-gray-900 shadow-xl overflow-hidden"
-                  >
-                    {(
-                      [
-                        ['monitor', T.sourceScreen, <Monitor className="w-3 h-3" />],
-                        ['window', T.sourceWindow, <AppWindow className="w-3 h-3" />],
-                        ['browser', T.sourceTab, <PanelTop className="w-3 h-3" />],
-                      ] as const
-                    ).map(([source, label, icon]) => (
-                      <button
-                        key={source}
-                        onClick={() => updateRecSettings({ source })}
-                        className="flex items-center gap-2 w-full px-3 py-2 text-xs text-gray-200 hover:bg-gray-700 transition-colors"
-                      >
-                        {icon} {label}
-                        {recSettings.source === source && <Check className="w-3 h-3 ml-auto" />}
-                      </button>
-                    ))}
-                    <div className="border-t border-gray-700" />
-                    <button
-                      onClick={() => updateRecSettings({ mic: !recSettings.mic })}
-                      className="flex items-center gap-2 w-full px-3 py-2 text-xs text-gray-200 hover:bg-gray-700 transition-colors"
-                    >
-                      <Mic className="w-3 h-3" /> {T.microphone}
-                      {recSettings.mic && <Check className="w-3 h-3 ml-auto" />}
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
-            {videoBlob && (
-              <span className="flex items-center gap-1 px-2 py-1 rounded text-xs bg-gray-800 border border-gray-600 text-gray-300">
-                <Video className="w-3 h-3 text-red-400" />
-                <span className="tabular-nums">{formatSeconds(videoDurationSec)}</span>
-                <button
-                  onClick={() => {
-                    setVideoBlob(null)
-                    setVideoDurationSec(0)
-                  }}
-                  title={T.removeVideo}
-                  className="p-0.5 rounded hover:bg-gray-600 transition-colors active:scale-95"
-                >
-                  <X className="w-3 h-3" />
-                </button>
-              </span>
-            )}
             <div className="flex-1" />
             <input
               value={description}
@@ -1236,7 +1014,6 @@ export default function Widget({ config }: { config: ResolvedConfig }) {
               )}
             </div>
             {error && <span className="text-xs text-red-400">{error}</span>}
-            {notice && <span className="text-xs text-yellow-400">{notice}</span>}
             <button
               onClick={() => setPhase('idle')}
               aria-label={T.close}
@@ -1346,24 +1123,6 @@ export default function Widget({ config }: { config: ResolvedConfig }) {
             />
           )}
         </div>
-      )}
-
-      {phase === 'recording' && (
-        <>
-          <div className="fixed inset-0 z-[9998] pointer-events-none border-4 border-red-500" />
-          <div className="fixed top-3 left-1/2 -translate-x-1/2 z-[9999] flex items-center gap-2 pl-3 pr-1.5 py-1.5 rounded-full bg-gray-900/95 text-white shadow-lg">
-            <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse" />
-            <span className="text-xs tabular-nums">
-              {formatSeconds(recordElapsed)} / {formatSeconds(VIDEO_MAX_SEC)}
-            </span>
-            <button
-              onClick={stopRecording}
-              className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-red-600 hover:bg-red-500 transition-colors active:scale-95"
-            >
-              <Square className="w-3 h-3 fill-current" /> {T.stopRecording}
-            </button>
-          </div>
-        </>
       )}
     </div>
   )

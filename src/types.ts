@@ -23,20 +23,9 @@ export interface Labels {
   textSizeDecrease: string
   textSizeIncrease: string
   strokeWidth: string
-  record: string
-  recordVideo: string
-  stopRecording: string
-  removeVideo: string
-  videoLimitReached: string
-  recordSettingsTitle: string
-  sourceScreen: string
-  sourceWindow: string
-  sourceTab: string
-  microphone: string
   errorCapture: string
   errorPrepare: string
   errorSend: string
-  errorRecord: string
 }
 
 export type ButtonPosition =
@@ -69,8 +58,6 @@ export interface BugReportConfig {
    * (requires `endpoint`).
    */
   download?: boolean
-  /** Screen recording button (max 60s per recording), enabled by default. Set to false to hide */
-  video?: boolean
   /** Network capture: only failed requests ('errors', default) or every request ('all') */
   network?: 'errors' | 'all'
   headers?: Record<string, string>
@@ -99,7 +86,6 @@ export interface ResolvedConfig {
   endpoint?: string
   destination: 'endpoint' | 'download'
   download: boolean
-  video: boolean
   network: 'errors' | 'all'
   headers?: Record<string, string>
   credentials?: RequestCredentials
@@ -137,18 +123,7 @@ export const defaultLabels: Labels = {
   textSizeDecrease: 'Smaller text',
   textSizeIncrease: 'Larger text',
   strokeWidth: 'Line thickness',
-  record: 'Record',
-  recordVideo: 'Record video (max 1:00)',
-  stopRecording: 'Stop',
-  removeVideo: 'Remove video',
-  videoLimitReached: 'Recording stopped: 1:00 limit reached',
-  recordSettingsTitle: 'Recording settings',
-  sourceScreen: 'Screen',
-  sourceWindow: 'Window',
-  sourceTab: 'This tab',
-  microphone: 'Microphone',
   errorCapture: 'Screenshot failed',
   errorPrepare: 'Failed to prepare image',
   errorSend: 'Failed to send',
-  errorRecord: 'Recording failed',
 }

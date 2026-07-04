@@ -16,8 +16,8 @@
       <h1>Demo host page</h1>
       <div class="card">
         <p>This is the host page. The red button on the left is the widget in Shadow DOM.</p>
-        <p>Click the button or press <kbd>Cmd/Ctrl+B</kbd> — screenshot, annotations, video recording, submission.</p>
-        <p>Sent reports land in <code>reports/new/</code> in the project root (screenshot, video, report.json). The Download option in the widget saves the same report as a .zip instead.</p>
+        <p>Click the button or press <kbd>Cmd/Ctrl+B</kbd> — screenshot, annotations, submission.</p>
+        <p>Sent reports land in <code>reports/new/</code> in the project root (screenshot, report.json). The Download option in the widget saves the same report as a .zip instead.</p>
       </div>
       <div class="card">
         <p>Generate traffic, then send a report and check <code>console_logs</code> / <code>network_requests</code> in it:</p>
@@ -34,7 +34,7 @@
     </main>
     <script type="module">
       import { init } from '/src/index.ts'
-      init({ endpoint: '/api/reports', video: true, network: 'all' })
+      init({ endpoint: '/api/reports', network: 'all' })
 
       const logEl = document.getElementById('demo-log')
       const logLine = (text) => {

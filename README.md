@@ -1,6 +1,6 @@
 # bug-report-widget
 
-Portable bug report button: page screenshot, annotations (rect / arrow / pencil / text), capture of console errors and failed network requests, submission to your endpoint. A single JS file (~64 kB gzip), Shadow DOM — host page styles don't leak in or break. No React/Tailwind required in the consuming project.
+Portable bug report button: page screenshot, annotations (rect / arrow / pencil / text), capture of console errors and failed network requests, submission to your endpoint. A single JS file (~63 kB gzip), Shadow DOM — host page styles don't leak in or break. No React/Tailwind required in the consuming project.
 
 Preact + Tailwind v4 inside, compiled into the bundle.
 
@@ -10,9 +10,9 @@ The floating button sits on the host page (draggable, position is remembered):
 
 ![Floating bug report button on a host page](https://raw.githubusercontent.com/bybraveHQ/bug-report-widget/main/assets/widget-button.jpeg)
 
-Click it — the page freezes into an annotated screenshot with tools, screen recording and a destination picker:
+Click it — the page freezes into an annotated screenshot with tools and a destination picker:
 
-![Annotation toolbar with drawing tools, recording and download](https://raw.githubusercontent.com/bybraveHQ/bug-report-widget/main/assets/widget-annotator.jpeg)
+![Annotation toolbar with drawing tools and download](https://raw.githubusercontent.com/bybraveHQ/bug-report-widget/main/assets/widget-annotator.jpeg)
 
 ## Build
 
@@ -42,7 +42,7 @@ Or straight from a CDN, no build step:
 ></script>
 ```
 
-Attributes: `data-endpoint` (required unless `data-destination="download"`), `data-destination="download"` (save the report as a .zip to the user's computer instead of POSTing), `data-download="false"` (hide the Download option — reports can only be sent to the endpoint), `data-video="false"` (hide the screen recording button, enabled by default), `data-network="all"` (capture every request, not just failed ones), `data-hotkey="false"` (disable Cmd/Ctrl+B) or `data-hotkey="k"` (remap to Cmd/Ctrl+K), `data-position="bottom-right"` (initial button position), `data-screenshot-quality="0.7"` (screenshot JPEG quality, 0–1), `data-credentials="include"`.
+Attributes: `data-endpoint` (required unless `data-destination="download"`), `data-destination="download"` (save the report as a .zip to the user's computer instead of POSTing), `data-download="false"` (hide the Download option — reports can only be sent to the endpoint), `data-network="all"` (capture every request, not just failed ones), `data-hotkey="false"` (disable Cmd/Ctrl+B) or `data-hotkey="k"` (remap to Cmd/Ctrl+K), `data-position="bottom-right"` (initial button position), `data-screenshot-quality="0.7"` (screenshot JPEG quality, 0–1), `data-credentials="include"`.
 
 Manual initialization instead of attributes:
 
@@ -88,7 +88,6 @@ init({
   endpoint: '/api/reports',        // required unless destination is 'download'
   destination: 'endpoint',         // default destination: 'endpoint' (POST) | 'download' (.zip)
   download: true,                  // false hides the Download option, reports go to `endpoint` only
-  video: true,                     // screen recording button (max 60s per recording), false hides it
   network: 'errors',               // network capture: 'errors' (failed requests only) | 'all' (every request)
   headers: { 'X-Api-Key': '...' }, // optional
   credentials: 'include',          // optional (RequestCredentials)
@@ -105,18 +104,9 @@ init({
 
 `onSubmit` receives `{ type, description, destination }`; `onError` receives the thrown error. Useful for host-side toasts or analytics.
 
-### Video recording
-
-A record button appears in the annotation toolbar (labeled with the 1:00 limit); `video: false` hides it. Recording uses the browser's screen-share picker (`getDisplayMedia`), shows a red frame with a live timer, and stops automatically at 60 seconds — the recorded video is kept and attached, and the user sees a notice about the limit. The video is sent as `video.webm` alongside the screenshot.
-
-The arrow next to the record button opens recording settings (remembered in localStorage):
-
-- **Source** — Screen / Window / This tab. A hint for the share picker: it opens on that tab, the user can still pick anything. Note: the red recording frame is drawn by the page, so when recording the whole screen it is only visible inside the tab — the browser shows its own system indicator.
-- **Microphone** — mix mic audio into the recording (asks for mic permission; if denied, records silently). Without it the video has no sound.
-
 ### Report destination
 
-The user picks where the report goes right in the widget: the arrow next to the submit button opens a Send / Download menu (the choice is remembered in localStorage). `destination` in the config only sets the default. Download saves `bug-report-<timestamp>.zip` with `screenshot.jpg`, `report.json` (url, description, type, console/network logs) and `video.webm` if recorded.
+The user picks where the report goes right in the widget: the arrow next to the submit button opens a Send / Download menu (the choice is remembered in localStorage). `destination` in the config only sets the default. Download saves `bug-report-<timestamp>.zip` with `screenshot.jpg` and `report.json` (url, description, type, console/network logs).
 
 With `destination: 'download'` and no `endpoint`, the widget is download-only and needs no backend at all.
 
@@ -129,7 +119,6 @@ With `download: false` (or `data-download="false"`), the destination picker is h
 | Field | Type | Description |
 |---|---|---|
 | `screenshot` | file (JPEG) | screenshot with annotations |
-| `video` | file (WebM), optional | screen recording (present only if recorded) |
 | `url` | string | page URL |
 | `page_title` | string | page title |
 | `description` | string | report text |
@@ -184,7 +173,6 @@ export async function POST(req: NextRequest) {
 - Cmd/Ctrl+B hotkey (layout-independent, ignored inside inputs and rich-text editors)
 - Screenshot via [snapdom](https://github.com/zumerlab/snapdom) (no browser permissions needed)
 - Tools: select/move, rectangle, arrow, pencil (adjustable line thickness), text (adjustable size); Undo (Cmd/Ctrl+Z), Clear
-- Screen recording (opt-in, max 60s, auto-stop with notice, red recording frame + timer)
 - Report type: Bug / Improvement
 - Destination: POST to your endpoint or a .zip download (no backend required)
 - Captures console warn/error, uncaught exceptions, unhandled rejections and failed resource loads (up to 100)
