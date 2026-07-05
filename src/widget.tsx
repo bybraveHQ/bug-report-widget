@@ -847,14 +847,19 @@ export default function Widget({ config }: { config: ResolvedConfig }) {
       {phase === 'annotating' && (
         <div className="fixed inset-0 z-[9999] bg-black flex flex-col">
           <div className="flex items-center gap-2 px-3 py-2 bg-gray-900 text-white shrink-0 flex-wrap">
-            <div className="flex items-center gap-1.5 mr-1 min-w-[112px]">
+            <div className="flex items-center gap-1.5 mr-1 shrink-0">
               {reportType === 'bug' ? (
                 <Bug className="w-4 h-4 text-red-400 shrink-0" />
               ) : (
                 <Lightbulb className="w-4 h-4 text-yellow-400 shrink-0" />
               )}
-              <span className={`text-sm font-semibold ${reportType === 'bug' ? 'text-red-400' : 'text-yellow-400'}`}>
-                {reportType === 'bug' ? T.typeBug : T.typeImprovement}
+              <span className="relative inline-grid text-sm font-semibold whitespace-nowrap">
+                <span className="col-start-1 row-start-1 invisible" aria-hidden="true">
+                  {T.typeBug.length >= T.typeImprovement.length ? T.typeBug : T.typeImprovement}
+                </span>
+                <span className={`col-start-1 row-start-1 ${reportType === 'bug' ? 'text-red-400' : 'text-yellow-400'}`}>
+                  {reportType === 'bug' ? T.typeBug : T.typeImprovement}
+                </span>
               </span>
             </div>
             <div className="flex items-center rounded overflow-hidden border border-gray-600 mr-1">
