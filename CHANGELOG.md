@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.0
+
+- Instant open: the editor overlay (spinner) appears in the same frame as the click — the capture no longer blocks the UI from showing. Previously the launcher was hidden and nothing was visible until the capture finished (1s+ freeze on heavy pages)
+- The widget host is excluded from the capture, so the launcher and overlay never end up in the screenshot — no more hide/show dance around the capture
+- `screenshotScale` option (`data-screenshot-scale`): screenshot raster scale, 0.5–3. Default is now 1 (CSS pixels) instead of the device pixel ratio — on retina this makes rasterization ~4x cheaper; pass `window.devicePixelRatio` to restore the old sharpness
+
 ## 0.4.0
 
 - **Breaking:** screen recording removed — the `video` option, `data-video` attribute and the `video.webm` report field are gone; recording could not survive host page reloads without a companion window, so the feature was dropped

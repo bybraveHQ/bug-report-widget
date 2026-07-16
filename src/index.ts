@@ -13,6 +13,10 @@ export type { BugReportConfig, ButtonPosition, Labels, SubmitInfo } from './type
 
 const HOST_ID = 'bug-report-widget'
 const SCREENSHOT_QUALITY_DEFAULT = 0.85
+// 1 = CSS pixels. Capture cost grows quadratically with scale, and on retina
+// (dpr 2) the old dpr-bound raster made every capture ~4x heavier for sharpness
+// a bug screenshot doesn't need.
+const SCREENSHOT_SCALE_DEFAULT = 1
 const POSITION_PRESETS = ['left', 'right', 'top-left', 'top-right', 'bottom-left', 'bottom-right']
 
 function resolveHotkey(hotkey: boolean | string | undefined): string | false {
@@ -39,6 +43,12 @@ function resolveScreenshotQuality(quality: number | undefined): number {
   return typeof quality === 'number' && quality > 0 && quality <= 1
     ? quality
     : SCREENSHOT_QUALITY_DEFAULT
+}
+
+function resolveScreenshotScale(scale: number | undefined): number {
+  return typeof scale === 'number' && scale >= 0.5 && scale <= 3
+    ? scale
+    : SCREENSHOT_SCALE_DEFAULT
 }
 const PROPERTY_STYLE_ID = 'bug-report-widget-properties'
 
@@ -83,6 +93,7 @@ export function init(config: BugReportConfig): void {
     onSubmit: config.onSubmit,
     onError: config.onError,
     screenshotQuality: resolveScreenshotQuality(config.screenshotQuality),
+    screenshotScale: resolveScreenshotScale(config.screenshotScale),
     labels: { ...defaultLabels, ...config.labels },
   }
 
@@ -131,6 +142,9 @@ if (typeof document !== 'undefined') {
         position: script?.dataset.position as ButtonPosition | undefined,
         screenshotQuality: script?.dataset.screenshotQuality
           ? Number(script.dataset.screenshotQuality)
+          : undefined,
+        screenshotScale: script?.dataset.screenshotScale
+          ? Number(script.dataset.screenshotScale)
           : undefined,
         credentials: script?.dataset.credentials as RequestCredentials | undefined,
       })

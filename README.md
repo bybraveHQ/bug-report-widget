@@ -42,7 +42,7 @@ Or straight from a CDN, no build step:
 ></script>
 ```
 
-Attributes: `data-endpoint` (required unless `data-destination="download"`), `data-destination="download"` (save the report as a .zip to the user's computer instead of POSTing), `data-download="false"` (hide the Download option — reports can only be sent to the endpoint), `data-network="all"` (capture every request, not just failed ones), `data-hotkey="false"` (disable Cmd/Ctrl+B) or `data-hotkey="k"` (remap to Cmd/Ctrl+K), `data-position="bottom-right"` (initial button position), `data-screenshot-quality="0.7"` (screenshot JPEG quality, 0–1), `data-credentials="include"`.
+Attributes: `data-endpoint` (required unless `data-destination="download"`), `data-destination="download"` (save the report as a .zip to the user's computer instead of POSTing), `data-download="false"` (hide the Download option — reports can only be sent to the endpoint), `data-network="all"` (capture every request, not just failed ones), `data-hotkey="false"` (disable Cmd/Ctrl+B) or `data-hotkey="k"` (remap to Cmd/Ctrl+K), `data-position="bottom-right"` (initial button position), `data-screenshot-quality="0.7"` (screenshot JPEG quality, 0–1), `data-screenshot-scale="2"` (screenshot raster scale, 0.5–3; default 1 — pass the device pixel ratio for retina-sharp shots at the cost of a slower capture), `data-credentials="include"`.
 
 Manual initialization instead of attributes:
 
@@ -106,6 +106,7 @@ init({
   onSubmit: (report) => {},        // after a report is sent or downloaded
   onError: (error) => {},          // when capture or sending fails
   screenshotQuality: 0.85,         // screenshot JPEG quality, 0–1
+  screenshotScale: 1,              // screenshot raster scale, 0.5–3 (1 = CSS pixels; devicePixelRatio for retina)
   labels: { send: 'Submit' },      // partial override of any label
 })
 ```

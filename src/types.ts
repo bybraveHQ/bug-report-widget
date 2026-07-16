@@ -79,6 +79,12 @@ export interface BugReportConfig {
   onError?: (error: unknown) => void
   /** JPEG quality of the screenshot, 0–1 (default 0.85) */
   screenshotQuality?: number
+  /**
+   * Raster scale of the screenshot, 0.5–3 (default 1 = CSS pixels). Capture
+   * cost grows with the square of the scale — pass window.devicePixelRatio
+   * for retina-sharp screenshots at the price of a slower capture.
+   */
+  screenshotScale?: number
   labels?: Partial<Labels>
 }
 
@@ -95,6 +101,7 @@ export interface ResolvedConfig {
   onSubmit?: (report: SubmitInfo) => void
   onError?: (error: unknown) => void
   screenshotQuality: number
+  screenshotScale: number
   labels: Labels
 }
 
