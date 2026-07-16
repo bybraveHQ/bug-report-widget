@@ -101,25 +101,30 @@ function initialButtonPos(position: ButtonPosition): { x: number; y: number } {
   }
 }
 
-async function captureViewport(quality: number): Promise<string> {
+async function captureViewport(
+  quality: number,
+  scale: number,
+  hostEl: Element | null,
+): Promise<string> {
   const { snapdom } = await import('@zumer/snapdom')
   // The output is cropped to the viewport, so subtrees that start below it
   // don't need to be cloned at all — on long pages this is the difference
   // between seconds and sub-second capture. Content above the viewport is
   // kept: removing it would reflow the clone and break the crop offset.
+  // The widget's own host is excluded too: the launcher/overlay never end up
+  // in the shot, so the UI can stay visible while the capture runs.
   const vh = window.innerHeight
   const capture = await snapdom(document.documentElement, {
     embedFonts: true,
-    filter: (el: Element) => el.getBoundingClientRect().top <= vh,
+    scale,
+    filter: (el: Element) => el !== hostEl && el.getBoundingClientRect().top <= vh,
     filterMode: 'remove',
   })
   const full = await capture.toCanvas()
-  // Crop the full-document render to what the user actually sees,
-  // keeping devicePixelRatio scale.
-  const dpr = window.devicePixelRatio || 1
+  // Crop the full-document render to what the user actually sees.
   const out = document.createElement('canvas')
-  out.width = Math.round(window.innerWidth * dpr)
-  out.height = Math.round(vh * dpr)
+  out.width = Math.round(window.innerWidth * scale)
+  out.height = Math.round(vh * scale)
   const ctx = out.getContext('2d')!
   // If the document is shorter than the viewport, the uncovered area stays
   // transparent and turns black in the JPEG export — pre-fill with the page
@@ -129,8 +134,8 @@ async function captureViewport(quality: number): Promise<string> {
   ctx.fillRect(0, 0, out.width, out.height)
   ctx.drawImage(
     full,
-    Math.round(window.scrollX * dpr),
-    Math.round(window.scrollY * dpr),
+    Math.round(window.scrollX * scale),
+    Math.round(window.scrollY * scale),
     out.width,
     out.height,
     0,
@@ -420,10 +425,17 @@ export default function Widget({ config }: { config: ResolvedConfig }) {
   const triggerCapture = useCallback(async () => {
     if (phase !== 'idle') return
     setPhase('capturing')
-    if (buttonRef.current) buttonRef.current.style.visibility = 'hidden'
+    // The widget host is excluded from the capture itself, so nothing needs
+    // hiding — the launcher spinner and the capturing overlay stay visible.
+    // Two rAFs let them paint before the capture blocks the main thread.
     await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))
     try {
-      const dataUrl = await captureViewport(config.screenshotQuality)
+      const hostEl = (buttonRef.current?.getRootNode() as ShadowRoot | null)?.host ?? null
+      const dataUrl = await captureViewport(
+        config.screenshotQuality,
+        config.screenshotScale,
+        hostEl,
+      )
       setScreenshotDataUrl(dataUrl)
       setAnnotations([])
       setLiveDraw(null)
@@ -443,8 +455,6 @@ export default function Widget({ config }: { config: ResolvedConfig }) {
       } catch {
         /* a throwing host callback must not break the widget */
       }
-    } finally {
-      if (buttonRef.current) buttonRef.current.style.visibility = 'visible'
     }
   }, [phase])
 
@@ -842,6 +852,12 @@ export default function Widget({ config }: { config: ResolvedConfig }) {
             <Bug className="w-4 h-4" />
           )}
         </button>
+      )}
+
+      {phase === 'capturing' && (
+        <div className="fixed inset-0 z-[9999] bg-black/70 flex items-center justify-center">
+          <Loader className="w-8 h-8 animate-spin text-white" />
+        </div>
       )}
 
       {phase === 'annotating' && (
