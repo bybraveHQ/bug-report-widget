@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.1
+
+- Fix: on retina displays (devicePixelRatio > 1) the screenshot showed only the top-left quarter of the page at 2x zoom — snapdom multiplies its render by `devicePixelRatio` by default while the viewport crop is computed in CSS pixels. The capture now pins `dpr: 1` so `screenshotScale` is the only scale factor, matching the 0.5.0 contract
+
 ## 0.5.0
 
 - Instant open: the editor overlay (spinner) appears in the same frame as the click — the capture no longer blocks the UI from showing. Previously the launcher was hidden and nothing was visible until the capture finished (1s+ freeze on heavy pages)

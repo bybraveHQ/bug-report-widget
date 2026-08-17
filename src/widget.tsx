@@ -117,6 +117,11 @@ async function captureViewport(
   const capture = await snapdom(document.documentElement, {
     embedFonts: true,
     scale,
+    // snapdom ≥2.x по умолчанию умножает рендер на window.devicePixelRatio,
+    // а кроп ниже считает в CSS-пикселях — на retina в кадр уходила левая
+    // верхняя четверть страницы в 2×. Масштабом управляет ТОЛЬКО scale
+    // (screenshotScale конфига); dpr фиксируем в 1.
+    dpr: 1,
     filter: (el: Element) => el !== hostEl && el.getBoundingClientRect().top <= vh,
     filterMode: 'remove',
   })
